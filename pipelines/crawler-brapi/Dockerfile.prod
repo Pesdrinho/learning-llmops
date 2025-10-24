@@ -1,0 +1,46 @@
+# Dockerfile de produção para Cloud Run - Crawler Brapi
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instala dependências do sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copia arquivos de dependências primeiro (para cache do Docker)
+COPY pipelines/crawler-brapi/requirements.txt ./requirements.txt
+
+# Instala dependências
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copia código necessário
+COPY llmops_lab llmops_lab/
+COPY pipelines/crawler-brapi pipelines/crawler-brapi/
+COPY data-schemas/seeds data-schemas/seeds/
+
+# Cria usuário não-root
+RUN useradd -m -u 1000 crawler && chown -R crawler:crawler /app
+USER crawler
+
+# Variáveis de ambiente
+ENV PYTHONUNBUFFERED=1
+ENV APP_ENV=production
+ENV PORT=8080
+ENV PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Expõe porta para Cloud Run
+EXPOSE 8080
+
+# Comando para executar o servidor HTTP
+WORKDIR /app/pipelines/crawler-brapi/app
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info"]
+
+

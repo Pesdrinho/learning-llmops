@@ -1,0 +1,54 @@
+# Cloud Build configuração para Crawler Brapi
+substitutions:
+  _IMAGE_NAME: crawler-brapi
+  _REGION: us-central1
+  _REPOSITORY: docker-images
+
+steps:
+  # Build da imagem
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:latest'
+      - '-f'
+      - 'pipelines/crawler-brapi/Dockerfile.prod'
+      - '.'
+
+  # Push da imagem para Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}'
+
+  # Deploy no Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_IMAGE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:latest'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--timeout=600'
+      - '--max-instances=1'
+      - '--allow-unauthenticated'
+      - '--service-account=learning-llmops@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars=APP_ENV=production'
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:latest'
+
+timeout: 1200s
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+

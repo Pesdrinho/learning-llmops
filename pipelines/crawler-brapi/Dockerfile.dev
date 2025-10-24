@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y gcc postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# Copia dependências específicas do crawler
+COPY pipelines/crawler-brapi/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia código
+COPY llmops_lab llmops_lab/
+COPY pipelines/crawler-brapi pipelines/crawler-brapi/
+
+ENV PYTHONUNBUFFERED=1
+ENV APP_ENV=development
+ENV PORT=8080
+ENV PYTHONPATH=/app
+
+WORKDIR /app/pipelines/crawler-brapi/app
+
+# Inicia servidor com hot-reload
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

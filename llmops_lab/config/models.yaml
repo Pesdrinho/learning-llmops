@@ -1,0 +1,92 @@
+# Configuração de Modelos e Preços
+# Preços em USD por 1k tokens (atualizado em 2025-10-09)
+
+openrouter:
+  # Modelos Rápidos/Baratos
+  openrouter/gpt-5-mini:
+    name: "GPT-5 Mini"
+    provider: "openrouter"
+    in_usd_per_1k: 0.0025
+    out_usd_per_1k: 0.002
+    context_window: 400000
+    use_case: "fast"
+
+  openrouter/meta-llama/llama-3-8b-instruct:
+    name: "Llama 3 8B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.00007
+    out_usd_per_1k: 0.00007
+    context_window: 8192
+    use_case: "fast"
+
+  # Modelos Precisos/Caros
+  anthropic/claude-3.5-sonnet:
+    name: "Claude 3.5 Sonnet"
+    provider: "openrouter"
+    in_usd_per_1k: 3.00
+    out_usd_per_1k: 15.00
+    context_window: 200000
+    use_case: "precise"
+
+  openrouter/gpt-4-turbo:
+    name: "GPT-4 Turbo"
+    provider: "openrouter"
+    in_usd_per_1k: 10.00
+    out_usd_per_1k: 30.00
+    context_window: 128000
+    use_case: "precise"
+
+  # Modelos Médios
+  openrouter/mistralai/mistral-7b-instruct:
+    name: "Mistral 7B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.00013
+    out_usd_per_1k: 0.00013
+    context_window: 8192
+    use_case: "balanced"
+
+embeddings:
+  openai/text-embedding-3-small:
+    name: "OpenAI Embedding Small"
+    provider: "openai"
+    dims: 1536
+    usd_per_1k: 0.00002
+    use_case: "rag"
+
+  openai/text-embedding-3-large:
+    name: "OpenAI Embedding Large"
+    provider: "openai"
+    dims: 3072
+    usd_per_1k: 0.00013
+    use_case: "rag-precise"
+
+fine_tuning:
+  qwen/qwen-7b-chat:
+    name: "Qwen 7B Chat"
+    provider: "huggingface"
+    model_id: "Qwen/Qwen-7B-Chat"
+    context_window: 8192
+    use_case: "tool-use"
+    notes: "Modelo base para fine-tuning de tool calling"
+
+  qwen/qwen-14b-chat:
+    name: "Qwen 14B Chat"
+    provider: "huggingface"
+    model_id: "Qwen/Qwen-14B-Chat"
+    context_window: 8192
+    use_case: "tool-use-advanced"
+    notes: "Modelo maior para casos mais complexos"
+
+# Aliases para facilitar uso
+aliases:
+  fast: "openrouter/gpt-3.5-turbo"
+  precise: "anthropic/claude-3.5-sonnet"
+  balanced: "openrouter/mistralai/mistral-7b-instruct"
+  default_embed: "openai/text-embedding-3-small"
+  default_ft: "qwen/qwen-7b-chat"
+
+# Limites de Budget
+budget:
+  daily_limit_usd: 15.00
+  warning_threshold_pct: 80  # Aviso quando atingir 80% do limite
+  hard_limit: true  # Bloquear quando atingir limite

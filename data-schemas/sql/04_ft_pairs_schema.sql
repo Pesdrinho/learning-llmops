@@ -170,3 +170,7 @@ CREATE TRIGGER update_tools_catalog_updated_at BEFORE UPDATE ON finetune.tools_c
 -- GRANT SELECT ON ALL VIEWS IN SCHEMA finetune TO llmops_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA finetune TO llmops_user;
 -- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA finetune TO llmops_user;
+
+
+
+

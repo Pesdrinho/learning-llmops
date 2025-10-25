@@ -43,11 +43,19 @@ class DatabaseConfig:
         # Só usa se for válida (não contém ${} não expandidos e tem formato correto)
         self.database_url_async: str = ""
         self.database_url_sync: str = ""
-        
-        if database_url_async_raw and "${" not in database_url_async_raw and "@" in database_url_async_raw:
+
+        if (
+            database_url_async_raw
+            and "${" not in database_url_async_raw
+            and "@" in database_url_async_raw
+        ):
             self.database_url_async = cast(str, database_url_async_raw)
-        
-        if database_url_sync_raw and "${" not in database_url_sync_raw and "@" in database_url_sync_raw:
+
+        if (
+            database_url_sync_raw
+            and "${" not in database_url_sync_raw
+            and "@" in database_url_sync_raw
+        ):
             self.database_url_sync = cast(str, database_url_sync_raw)
 
     def get_async_url(self) -> str:

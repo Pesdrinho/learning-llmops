@@ -31,26 +31,28 @@ async def extract_dividends(data: dict[str, Any]) -> list[dict]:
                 # Validação defensiva para campos de data
                 date_str = dividend.get("date")
                 payment_date_str = dividend.get("paymentDate")
-                
+
                 if not date_str:
                     logger.warning(f"Dividendo {ticker} sem data, pulando...")
                     continue
-                
+
                 # Parse da data principal
                 try:
                     parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 except ValueError:
                     logger.warning(f"Data inválida para {ticker}: {date_str}, pulando...")
                     continue
-                
+
                 # Parse da data de pagamento (opcional)
                 parsed_payment_date = None
                 if payment_date_str and payment_date_str:
                     try:
                         parsed_payment_date = datetime.strptime(payment_date_str, "%Y-%m-%d").date()
                     except ValueError:
-                        logger.warning(f"Data de pagamento inválida para {ticker}: {payment_date_str}")
-                
+                        logger.warning(
+                            f"Data de pagamento inválida para {ticker}: {payment_date_str}"
+                        )
+
                 dividend_record = {
                     "ticker": ticker,
                     "date": parsed_date,
@@ -68,7 +70,3 @@ async def extract_dividends(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídos {len(dividends)} dividendos")
     return dividends
-
-
-
-

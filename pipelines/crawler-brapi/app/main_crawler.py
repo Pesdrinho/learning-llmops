@@ -44,7 +44,7 @@ async def crawl_quotes(client, db, tickers: list[str]):
         for ticker in tickers:
             try:
                 data = await client.get_quote([ticker])
-                
+
                 # Extrai e salva
                 quote_data = await quotes.extract_quotes(data)
                 if quote_data:
@@ -53,14 +53,14 @@ async def crawl_quotes(client, db, tickers: list[str]):
 
                     await upsert_assets(db, assets)
                     await upsert_ohlcv(db, quote_records)
-                    
+
                     logger.info(f"Cotação de {ticker} coletada com sucesso")
                 else:
                     logger.warning(f"Nenhum dado de cotação para {ticker}")
 
                 # Delay para respeitar rate limits
                 await asyncio.sleep(1)
-                
+
             except Exception as e:
                 logger.error(f"Erro ao coletar cotação de {ticker}: {e}")
                 continue
@@ -76,11 +76,7 @@ async def crawl_historical(client, db, ticker: str, range: str = "1mo"):
     logger.info(f"Coletando histórico de {ticker}")
 
     try:
-        data = await client.get_historical_data(
-            ticker=ticker,
-            range=range,
-            dividends=True
-        )
+        data = await client.get_historical_data(ticker=ticker, range=range, dividends=True)
 
         # Extrai OHLCV
         ohlcv_data = await ohlcv.extract_ohlcv(data)
@@ -122,7 +118,7 @@ async def crawl_crypto(client, db):
         data = await client.get_crypto()
         crypto_data = await crypto.extract_crypto(data)
         await upsert_crypto(db, crypto_data)
-        
+
         # Delay após coleta de crypto
         await asyncio.sleep(1)
 
@@ -141,14 +137,11 @@ async def crawl_inflation(client, db):
         end_date = datetime.now().strftime("%d/%m/%Y")
         start_date = (datetime.now() - timedelta(days=365)).strftime("%d/%m/%Y")
 
-        data = await client.get_inflation(
-            start=start_date,
-            end=end_date
-        )
+        data = await client.get_inflation(start=start_date, end=end_date)
 
         inflation_data = await inflation.extract_inflation(data)
         await upsert_inflation(db, inflation_data)
-        
+
         # Delay após coleta de inflação
         await asyncio.sleep(1)
 
@@ -167,14 +160,11 @@ async def crawl_selic(client, db):
         end_date = datetime.now().strftime("%d/%m/%Y")
         start_date = (datetime.now() - timedelta(days=365)).strftime("%d/%m/%Y")
 
-        data = await client.get_prime_rate(
-            start=start_date,
-            end=end_date
-        )
+        data = await client.get_prime_rate(start=start_date, end=end_date)
 
         selic_data = await inflation.extract_selic(data)
         await upsert_selic(db, selic_data)
-        
+
         # Delay após coleta de SELIC
         await asyncio.sleep(1)
 
@@ -212,17 +202,34 @@ async def run_full_crawl(sample: bool = False):
         try:
             # 1. Coleta lista de tickers disponíveis
             logger.info("Obtendo lista de tickers...")
-            
+
             # Tickers principais como fallback
             fallback_tickers = [
-                "PETR4", "VALE3", "ITUB4", "BBDC4", "MGLU3", "ABEV3", "WEGE3",
-                "B3SA3", "RENT3", "SUZB3", "RAIL3", "JBSS3", "EMBR3", "TOTS3",
-                "RDOR3", "GGBR4", "USIM5", "CSAN3", "BBAS3", "ELET3"
+                "PETR4",
+                "VALE3",
+                "ITUB4",
+                "BBDC4",
+                "MGLU3",
+                "ABEV3",
+                "WEGE3",
+                "B3SA3",
+                "RENT3",
+                "SUZB3",
+                "RAIL3",
+                "JBSS3",
+                "EMBR3",
+                "TOTS3",
+                "RDOR3",
+                "GGBR4",
+                "USIM5",
+                "CSAN3",
+                "BBAS3",
+                "ELET3",
             ]
-            
+
             try:
                 available_data = await client.get_available_tickers(limit=1000)
-                
+
                 # Validação defensiva da resposta
                 if not isinstance(available_data, dict):
                     logger.error(
@@ -246,16 +253,19 @@ async def run_full_crawl(sample: bool = False):
                         all_tickers = fallback_tickers
                     else:
                         all_tickers = [
-                            stock["stock"] for stock in stocks_list
+                            stock["stock"]
+                            for stock in stocks_list
                             if isinstance(stock, dict) and "stock" in stock
                         ]
-                        
+
                         if not all_tickers:
-                            logger.warning("Nenhum ticker válido encontrado. Usando tickers fallback.")
+                            logger.warning(
+                                "Nenhum ticker válido encontrado. Usando tickers fallback."
+                            )
                             all_tickers = fallback_tickers
                         else:
                             logger.info(f"Sucesso! {len(all_tickers)} tickers obtidos da API")
-            
+
             except Exception as e:
                 logger.error(f"Erro ao obter tickers da API: {e}. Usando tickers fallback.")
                 all_tickers = fallback_tickers
@@ -313,9 +323,7 @@ async def main():
 
     parser = argparse.ArgumentParser(description="Crawler Brapi")
     parser.add_argument(
-        "--sample",
-        action="store_true",
-        help="Executa em modo sample (poucos dados para teste)"
+        "--sample", action="store_true", help="Executa em modo sample (poucos dados para teste)"
     )
 
     args = parser.parse_args()
@@ -325,7 +333,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-

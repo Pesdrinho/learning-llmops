@@ -158,7 +158,3 @@ COMMENT ON FUNCTION observability.check_daily_limit IS 'Verifica se atingiu limi
 -- GRANT SELECT ON ALL VIEWS IN SCHEMA observability TO llmops_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA observability TO llmops_user;
 -- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA observability TO llmops_user;
-
-
-
-

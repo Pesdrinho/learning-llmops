@@ -127,6 +127,7 @@ END;
 $$ language 'plpgsql';
 
 -- Trigger para atualizar updated_at em assets
+DROP TRIGGER IF EXISTS update_assets_updated_at ON market.assets;
 CREATE TRIGGER update_assets_updated_at BEFORE UPDATE ON market.assets
     FOR EACH ROW EXECUTE FUNCTION market.update_updated_at_column();
 

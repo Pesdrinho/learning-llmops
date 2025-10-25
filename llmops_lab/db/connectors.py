@@ -28,29 +28,27 @@ class DatabaseConfig:
         self.env = os.getenv("APP_ENV", "development")
         self.use_cloud_sql_proxy = os.getenv("USE_CLOUD_SQL_PROXY", "false").lower() == "true"
 
-        # URLs de conexão
+        # Carrega variáveis individuais primeiro
+        self.db_connection_name: str = os.getenv("DB_CONNECTION_NAME", "")
+        self.db_user: str = os.getenv("DB_USER", "llmops_user")
+        self.db_password: str = os.getenv("DB_PASSWORD", "")
+        self.db_name: str = os.getenv("DB_NAME", "llmops")
+        self.db_host: str = os.getenv("DB_HOST", "localhost")
+        self.db_port: str = os.getenv("DB_PORT", "5432")
+
+        # URLs de conexão (tenta do secrets, valida antes de usar)
         database_url_async_raw = secrets.get_secret("DATABASE_URL", None)
         database_url_sync_raw = secrets.get_secret("DATABASE_URL_SYNC", None)
 
-        if database_url_async_raw is None:
-            raise ValueError("DATABASE_URL (async) não configurada.")
-        if database_url_sync_raw is None:
-            raise ValueError("DATABASE_URL_SYNC (sync) não configurada.")
-
-        self.database_url_async: str = cast(str, database_url_async_raw)
-        self.database_url_sync: str = cast(str, database_url_sync_raw)
-
-        # Cloud SQL
-        self.db_connection_name: str = self._get_env_var("DB_CONNECTION_NAME")
-        self.db_user: str = self._get_env_var("DB_USER", "llmops_user")
-        self.db_password: str = self._get_env_var("DB_PASSWORD")
-        self.db_name: str = self._get_env_var("DB_NAME", "llmops")
-
-    def _get_env_var(self, name: str, default: str | None = None) -> str:
-        value = os.getenv(name, default)
-        if value is None:
-            raise ValueError(f"Variável de ambiente '{name}' não configurada.")
-        return cast(str, value)
+        # Só usa se for válida (não contém ${} não expandidos e tem formato correto)
+        self.database_url_async: str = ""
+        self.database_url_sync: str = ""
+        
+        if database_url_async_raw and "${" not in database_url_async_raw and "@" in database_url_async_raw:
+            self.database_url_async = cast(str, database_url_async_raw)
+        
+        if database_url_sync_raw and "${" not in database_url_sync_raw and "@" in database_url_sync_raw:
+            self.database_url_sync = cast(str, database_url_sync_raw)
 
     def get_async_url(self) -> str:
         """Retorna URL async"""
@@ -61,11 +59,7 @@ class DatabaseConfig:
         if self.use_cloud_sql_proxy:
             return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@/cloudsql/{self.db_connection_name}/{self.db_name}"
 
-        host = self._get_env_var("DB_HOST", "localhost")
-        port = self._get_env_var("DB_PORT", "5432")
-        return (
-            f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{host}:{port}/{self.db_name}"
-        )
+        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     def get_sync_url(self) -> str:
         """Retorna URL síncrona"""
@@ -76,9 +70,7 @@ class DatabaseConfig:
         if self.use_cloud_sql_proxy:
             return f"postgresql://{self.db_user}:{self.db_password}@/cloudsql/{self.db_connection_name}/{self.db_name}"
 
-        host = self._get_env_var("DB_HOST", "localhost")
-        port = self._get_env_var("DB_PORT", "5432")
-        return f"postgresql://{self.db_user}:{self.db_password}@{host}:{port}/{self.db_name}"
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 
 class AsyncDatabaseConnection:

@@ -40,22 +40,30 @@ async def crawl_quotes(client, db, tickers: list[str]):
     logger.info(f"Coletando cotações de {len(tickers)} tickers")
 
     try:
-        # Busca cotações em lotes de 50
-        batch_size = 50
-        for i in range(0, len(tickers), batch_size):
-            batch = tickers[i:i + batch_size]
-            data = await client.get_quote(batch)
+        # Plano gratuito: 1 ticker por requisição
+        for ticker in tickers:
+            try:
+                data = await client.get_quote([ticker])
+                
+                # Extrai e salva
+                quote_data = await quotes.extract_quotes(data)
+                if quote_data:
+                    assets = [q["asset"] for q in quote_data]
+                    quote_records = [q["quote"] for q in quote_data]
 
-            # Extrai e salva
-            quote_data = await quotes.extract_quotes(data)
-            assets = [q["asset"] for q in quote_data]
-            quote_records = [q["quote"] for q in quote_data]
+                    await upsert_assets(db, assets)
+                    await upsert_ohlcv(db, quote_records)
+                    
+                    logger.info(f"Cotação de {ticker} coletada com sucesso")
+                else:
+                    logger.warning(f"Nenhum dado de cotação para {ticker}")
 
-            await upsert_assets(db, assets)
-            await upsert_ohlcv(db, quote_records)
-
-            # Pequeno delay para não sobrecarregar API
-            await asyncio.sleep(1)
+                # Delay para respeitar rate limits
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"Erro ao coletar cotação de {ticker}: {e}")
+                continue
 
         logger.info("Coleta de cotações completa")
 
@@ -98,7 +106,7 @@ async def crawl_fx_rates(client, db):
             data = await client.get_currency(pair)
             fx_data = await fx_rates.extract_fx_rates(data)
             await upsert_fx_rates(db, fx_data)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)  # Rate limiting para FX
 
         logger.info("Coleta de FX rates completa")
 
@@ -114,6 +122,9 @@ async def crawl_crypto(client, db):
         data = await client.get_crypto()
         crypto_data = await crypto.extract_crypto(data)
         await upsert_crypto(db, crypto_data)
+        
+        # Delay após coleta de crypto
+        await asyncio.sleep(1)
 
         logger.info("Coleta de cripto completa")
 
@@ -137,6 +148,9 @@ async def crawl_inflation(client, db):
 
         inflation_data = await inflation.extract_inflation(data)
         await upsert_inflation(db, inflation_data)
+        
+        # Delay após coleta de inflação
+        await asyncio.sleep(1)
 
         logger.info("Coleta de inflação completa")
 
@@ -160,6 +174,9 @@ async def crawl_selic(client, db):
 
         selic_data = await inflation.extract_selic(data)
         await upsert_selic(db, selic_data)
+        
+        # Delay após coleta de SELIC
+        await asyncio.sleep(1)
 
         logger.info("Coleta de SELIC completa")
 
@@ -195,16 +212,61 @@ async def run_full_crawl(sample: bool = False):
         try:
             # 1. Coleta lista de tickers disponíveis
             logger.info("Obtendo lista de tickers...")
-            available_data = await client.get_available_tickers(limit=1000)
-            all_tickers = [stock["stock"] for stock in available_data.get("stocks", [])]
+            
+            # Tickers principais como fallback
+            fallback_tickers = [
+                "PETR4", "VALE3", "ITUB4", "BBDC4", "MGLU3", "ABEV3", "WEGE3",
+                "B3SA3", "RENT3", "SUZB3", "RAIL3", "JBSS3", "EMBR3", "TOTS3",
+                "RDOR3", "GGBR4", "USIM5", "CSAN3", "BBAS3", "ELET3"
+            ]
+            
+            try:
+                available_data = await client.get_available_tickers(limit=1000)
+                
+                # Validação defensiva da resposta
+                if not isinstance(available_data, dict):
+                    logger.error(
+                        f"Resposta inválida da API (tipo {type(available_data).__name__}). "
+                        f"Usando tickers fallback. Resposta: {str(available_data)[:200]}"
+                    )
+                    all_tickers = fallback_tickers
+                elif "stocks" not in available_data:
+                    logger.warning(
+                        f"Resposta sem campo 'stocks'. Usando tickers fallback. "
+                        f"Chaves disponíveis: {list(available_data.keys())}"
+                    )
+                    all_tickers = fallback_tickers
+                else:
+                    stocks_list = available_data.get("stocks", [])
+                    if not isinstance(stocks_list, list):
+                        logger.error(
+                            f"Campo 'stocks' não é uma lista (tipo {type(stocks_list).__name__}). "
+                            f"Usando tickers fallback."
+                        )
+                        all_tickers = fallback_tickers
+                    else:
+                        all_tickers = [
+                            stock["stock"] for stock in stocks_list
+                            if isinstance(stock, dict) and "stock" in stock
+                        ]
+                        
+                        if not all_tickers:
+                            logger.warning("Nenhum ticker válido encontrado. Usando tickers fallback.")
+                            all_tickers = fallback_tickers
+                        else:
+                            logger.info(f"Sucesso! {len(all_tickers)} tickers obtidos da API")
+            
+            except Exception as e:
+                logger.error(f"Erro ao obter tickers da API: {e}. Usando tickers fallback.")
+                all_tickers = fallback_tickers
 
             if sample:
                 # Amostra: apenas alguns tickers principais
-                tickers = ["PETR4", "VALE3", "ITUB4", "BBDC4", "MGLU3"][:5]
+                tickers = fallback_tickers[:5]
             else:
                 tickers = all_tickers
 
-            logger.info(f"Total de tickers: {len(tickers)}")
+            logger.info(f"Total de tickers para processar: {len(tickers)}")
 
             # 2. Coleta cotações atuais
             await crawl_quotes(client, db, tickers)
@@ -218,7 +280,7 @@ async def run_full_crawl(sample: bool = False):
 
             for ticker in sample_tickers:
                 await crawl_historical(client, db, ticker, range="3mo" if sample else "1y")
-                await asyncio.sleep(1)  # Rate limiting
+                await asyncio.sleep(2)  # Rate limiting - delay maior para histórico
 
             # 4. Coleta taxas de câmbio
             await crawl_fx_rates(client, db)

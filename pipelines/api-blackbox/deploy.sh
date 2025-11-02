@@ -66,23 +66,23 @@ log_info "Raiz do projeto: $PROJECT_ROOT"
 # Carrega .env
 if [ -f "$PROJECT_ROOT/.env" ]; then
     log_success "Carregando variáveis do .env..."
-    
+
     # Parser seguro que ignora comentários e linhas vazias
     while IFS= read -r line || [ -n "$line" ]; do
         # Remove espaços
         line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        
+
         # Ignora linhas vazias e comentários
         if [ -z "$line" ] || [[ "$line" =~ ^# ]]; then
             continue
         fi
-        
+
         # Exporta variável se formato válido
         if [[ "$line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]]; then
             export "$line"
         fi
     done < "$PROJECT_ROOT/.env"
-    
+
     log_success "Variáveis carregadas"
 else
     log_warning "Arquivo .env não encontrado em $PROJECT_ROOT"
@@ -167,6 +167,7 @@ gcloud builds submit \
     --config=pipelines/api-blackbox/cloudbuild.yaml \
     --project=$PROJECT_ID \
     --timeout=1200s \
+    --service-account="projects/${PROJECT_ID}/serviceAccounts/learning-llmops@${PROJECT_ID}.iam.gserviceaccount.com" \
     . || {
         log_error "Build falhou!"
         exit 1
@@ -261,4 +262,3 @@ echo ""
 
 echo -e "${GREEN}Deploy finalizado! 🎊${NC}"
 echo ""
-

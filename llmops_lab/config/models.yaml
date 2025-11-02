@@ -1,63 +1,135 @@
 # Configuração de Modelos e Preços
-# Preços em USD por 1k tokens (atualizado em 2025-10-09)
+# Preços em USD por 1M tokens (atualizado em 2025-10-31)
+# Fonte: https://openrouter.ai/models
 
 openrouter:
-  # Modelos Rápidos/Baratos
-  openrouter/gpt-5-mini:
-    name: "GPT-5 Mini"
-    provider: "openrouter"
-    in_usd_per_1k: 0.0025
-    out_usd_per_1k: 0.002
-    context_window: 400000
-    use_case: "fast"
+  # ==================== MODELOS RÁPIDOS/BARATOS ====================
 
-  openrouter/meta-llama/llama-3-8b-instruct:
-    name: "Llama 3 8B Instruct"
+  openai/gpt-4o-mini:
+    name: "GPT-4o Mini"
     provider: "openrouter"
-    in_usd_per_1k: 0.00007
-    out_usd_per_1k: 0.00007
-    context_window: 8192
+    in_usd_per_1k: 0.000150
+    out_usd_per_1k: 0.000600
+    context_window: 128000
     use_case: "fast"
+    description: "Modelo mais rápido e barato da OpenAI com ótimo custo-benefício"
 
-  # Modelos Precisos/Caros
+  meta-llama/llama-3.1-8b-instruct:
+    name: "Llama 3.1 8B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000050
+    out_usd_per_1k: 0.000050
+    context_window: 128000
+    use_case: "fast"
+    description: "Modelo open source da Meta, muito rápido e barato"
+
+  google/gemini-flash-2.5:
+    name: "Gemini 2.5 Flash"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000200
+    out_usd_per_1k: 0.002500
+    context_window: 1000000
+    use_case: "fast"
+    description: "Modelo rápido do Google com contexto massivo"
+
+  qwen/qwen-2.5-7b-instruct:
+    name: "Qwen 2.5 7B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000040
+    out_usd_per_1k: 0.000040
+    context_window: 32768
+    use_case: "fast"
+    description: "Modelo chinês open source de alta qualidade"
+
+  # ==================== MODELOS BALANCEADOS ====================
+
+  openai/gpt-4o:
+    name: "GPT-4o"
+    provider: "openrouter"
+    in_usd_per_1k: 0.002500
+    out_usd_per_1k: 0.010000
+    context_window: 128000
+    use_case: "balanced"
+    description: "Modelo flagship da OpenAI com multimodal nativo"
+
+  anthropic/claude-3-haiku:
+    name: "Claude 3 Haiku"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000250
+    out_usd_per_1k: 0.001250
+    context_window: 200000
+    use_case: "balanced"
+    description: "Claude mais rápido e barato, ótimo custo-benefício"
+
+  google/gemini-pro-1.5:
+    name: "Gemini 1.5 Pro"
+    provider: "openrouter"
+    in_usd_per_1k: 0.001250
+    out_usd_per_1k: 0.005000
+    context_window: 2000000
+    use_case: "balanced"
+    description: "Modelo do Google com contexto gigantesco"
+
+  deepseek/deepseek-chat:
+    name: "DeepSeek Chat"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000140
+    out_usd_per_1k: 0.000280
+    context_window: 64000
+    use_case: "balanced"
+    description: "Modelo chinês com excelente performance"
+
+  # ==================== MODELOS PRECISOS/CAROS ====================
+
   anthropic/claude-3.5-sonnet:
     name: "Claude 3.5 Sonnet"
     provider: "openrouter"
-    in_usd_per_1k: 3.00
-    out_usd_per_1k: 15.00
+    in_usd_per_1k: 0.003000
+    out_usd_per_1k: 0.015000
     context_window: 200000
     use_case: "precise"
+    description: "Um dos melhores modelos disponíveis, excelente raciocínio"
 
-  openrouter/gpt-4-turbo:
+  openai/gpt-4-turbo:
     name: "GPT-4 Turbo"
     provider: "openrouter"
-    in_usd_per_1k: 10.00
-    out_usd_per_1k: 30.00
+    in_usd_per_1k: 0.010000
+    out_usd_per_1k: 0.030000
     context_window: 128000
     use_case: "precise"
+    description: "GPT-4 completo com visão e análise avançada"
 
-  # Modelos Médios
-  openrouter/mistralai/mistral-7b-instruct:
-    name: "Mistral 7B Instruct"
+  meta-llama/llama-3.1-70b-instruct:
+    name: "Llama 3.1 70B Instruct"
     provider: "openrouter"
-    in_usd_per_1k: 0.00013
-    out_usd_per_1k: 0.00013
-    context_window: 8192
-    use_case: "balanced"
+    in_usd_per_1k: 0.000520
+    out_usd_per_1k: 0.000750
+    context_window: 128000
+    use_case: "precise"
+    description: "Modelo grande da Meta com excelente qualidade"
+
+  qwen/qwen-2.5-72b-instruct:
+    name: "Qwen 2.5 72B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000350
+    out_usd_per_1k: 0.000400
+    context_window: 32768
+    use_case: "precise"
+    description: "Modelo grande chinês com ótimo custo-benefício"
 
 embeddings:
   openai/text-embedding-3-small:
     name: "OpenAI Embedding Small"
     provider: "openai"
     dims: 1536
-    usd_per_1k: 0.00002
+    usd_per_1k: 0.000000020
     use_case: "rag"
 
   openai/text-embedding-3-large:
     name: "OpenAI Embedding Large"
     provider: "openai"
     dims: 3072
-    usd_per_1k: 0.00013
+    usd_per_1k: 0.000000130
     use_case: "rag-precise"
 
 fine_tuning:
@@ -79,9 +151,9 @@ fine_tuning:
 
 # Aliases para facilitar uso
 aliases:
-  fast: "openrouter/gpt-3.5-turbo"
+  fast: "openai/gpt-4o-mini"
   precise: "anthropic/claude-3.5-sonnet"
-  balanced: "openrouter/mistralai/mistral-7b-instruct"
+  balanced: "deepseek/deepseek-chat"
   default_embed: "openai/text-embedding-3-small"
   default_ft: "qwen/qwen-7b-chat"
 

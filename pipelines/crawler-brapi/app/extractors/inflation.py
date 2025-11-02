@@ -75,7 +75,3 @@ async def extract_selic(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídos {len(selic_records)} registros de SELIC")
     return selic_records
-
-
-
-

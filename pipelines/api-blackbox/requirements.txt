@@ -57,3 +57,13 @@ ruff==0.6.9
 
 # Type checking
 mypy==1.11.2
+
+# ========================================
+# LangChain - Framework para trabalhar com LLMs
+# ========================================
+
+# LangChain Core - Abstrações base para prompts e chains
+langchain-core==1.0.2
+
+# LangChain - Framework completo com integrações
+langchain==1.0.3

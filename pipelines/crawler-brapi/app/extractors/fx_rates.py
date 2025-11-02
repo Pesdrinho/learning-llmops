@@ -46,7 +46,3 @@ async def extract_fx_rates(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídas {len(fx_rates)} taxas de câmbio")
     return fx_rates
-
-
-
-

@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS observability.llm_logs (
     status VARCHAR(50) DEFAULT 'success', -- success, error, rate_limited
     error_message TEXT,
     metadata JSONB, -- Metadados adicionais (tags, contexto, etc)
+    inference_type VARCHAR(50), -- chat_completion, dataset_generation
+    guardrails_triggered TEXT[], -- Lista de guardrails que foram acionados
+    prompt_version VARCHAR(20), -- Versão do prompt template usado
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -26,11 +29,16 @@ CREATE INDEX IF NOT EXISTS idx_llm_logs_ts ON observability.llm_logs(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_llm_logs_model ON observability.llm_logs(model);
 CREATE INDEX IF NOT EXISTS idx_llm_logs_user ON observability.llm_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_llm_logs_status ON observability.llm_logs(status);
+CREATE INDEX IF NOT EXISTS idx_llm_logs_inference_type ON observability.llm_logs(inference_type);
+CREATE INDEX IF NOT EXISTS idx_llm_logs_prompt_version ON observability.llm_logs(prompt_version);
 -- CREATE INDEX IF NOT EXISTS idx_llm_logs_date ON observability.llm_logs(DATE(ts));
 
 COMMENT ON TABLE observability.llm_logs IS 'Logs detalhados de chamadas LLM';
 COMMENT ON COLUMN observability.llm_logs.prompt_masked IS 'Prompt com PII removido';
 COMMENT ON COLUMN observability.llm_logs.response_masked IS 'Resposta com PII removido';
+COMMENT ON COLUMN observability.llm_logs.inference_type IS 'Tipo de inferência (chat_completion, dataset_generation)';
+COMMENT ON COLUMN observability.llm_logs.guardrails_triggered IS 'Lista de guardrails acionados durante a requisição';
+COMMENT ON COLUMN observability.llm_logs.prompt_version IS 'Versão do prompt template utilizado';
 
 -- Tabela de controle de gastos (ledger)
 CREATE TABLE IF NOT EXISTS observability.spend_ledger (

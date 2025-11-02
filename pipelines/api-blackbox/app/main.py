@@ -36,13 +36,9 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from llmops_lab.db.connectors import get_async_db
-from llmops_lab.logging.logger import get_logger
-
-from .middleware.cost_limiter import CostLimiter, cost_limit_middleware
-from .middleware.pii_masker import masker
-from .models import (
+from middleware.cost_limiter import CostLimiter, cost_limit_middleware
+from middleware.pii_masker import masker
+from models import (
     ChatRequest,
     ChatResponse,
     ErrorDetail,
@@ -50,7 +46,12 @@ from .models import (
     ModelInfo,
     ModelsResponse,
 )
-from .router import OpenRouterClient
+from router import OpenRouterClient
+from routes.chat_completion import router as chat_completion_router
+from routes.dataset_generator import router as dataset_generator_router
+
+from llmops_lab.db.connectors import get_async_db
+from llmops_lab.logging.logger import get_logger
 
 # ========== CONFIGURAÇÃO ==========
 
@@ -61,6 +62,7 @@ API_VERSION = "0.1.0"
 
 
 # ========== LIFECYCLE EVENTS ==========
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -88,11 +90,10 @@ async def lifespan(app: FastAPI):
 
     # Inicializa recursos
     try:
-        # Testa conexão com banco
+        # Inicializa pool de conexões (singleton global)
         db = get_async_db()
         await db.connect()
         logger.info("✅ Banco de dados conectado")
-        await db.disconnect()
 
         # Testa OpenRouter
         async with OpenRouterClient():
@@ -109,6 +110,11 @@ async def lifespan(app: FastAPI):
 
     # ========== SHUTDOWN ==========
     logger.info("🛑 Encerrando API Blackbox...")
+
+    # Fecha pool de conexões
+    db = get_async_db()
+    await db.disconnect()
+
     logger.info("Cleanup concluído. Até logo! 👋")
 
 
@@ -163,8 +169,15 @@ app.add_middleware(
 # Verifica se cliente está dentro do limite diário antes de processar
 app.middleware("http")(cost_limit_middleware)
 
+# ========== ROUTERS ==========
+
+# Inclui routers das rotas especializadas
+app.include_router(chat_completion_router, tags=["Chat Completion"])
+app.include_router(dataset_generator_router, tags=["Dataset Generation"])
+
 
 # ========== TRATAMENTO DE ERROS GLOBAL ==========
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -183,10 +196,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorDetail(
-            error=exc.detail,
-            message=str(exc.detail),
-            request_id=str(uuid.uuid4())
-        ).model_dump()
+            error=exc.detail, message=str(exc.detail), request_id=str(uuid.uuid4())
+        ).model_dump(),
     )
 
 
@@ -212,18 +223,15 @@ async def general_exception_handler(request: Request, exc: Exception):
         content=ErrorDetail(
             error="internal_server_error",
             message="Erro interno do servidor. Entre em contato com o suporte.",
-            request_id=str(uuid.uuid4())
-        ).model_dump()
+            request_id=str(uuid.uuid4()),
+        ).model_dump(),
     )
 
 
 # ========== ENDPOINTS ==========
 
-@app.get(
-    "/",
-    summary="Root endpoint",
-    description="Retorna informações básicas da API"
-)
+
+@app.get("/", summary="Root endpoint", description="Retorna informações básicas da API")
 async def root():
     """
     Endpoint raiz - informações da API
@@ -247,11 +255,7 @@ async def root():
         "version": API_VERSION,
         "status": "running",
         "docs": "/docs",
-        "endpoints": {
-            "chat": "/chat",
-            "models": "/models",
-            "health": "/health"
-        }
+        "endpoints": {"chat": "/chat", "models": "/models", "health": "/health"},
     }
 
 
@@ -259,7 +263,7 @@ async def root():
     "/health",
     response_model=HealthResponse,
     summary="Health check",
-    description="Verifica saúde da API e dependências"
+    description="Verifica saúde da API e dependências",
 )
 async def health_check():
     """
@@ -303,8 +307,9 @@ async def health_check():
     # Verifica banco de dados
     try:
         db = get_async_db()
-        await db.connect()
-        await db.disconnect()
+        # Testa query simples
+        async with db.pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
         checks["database"] = "ok"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
@@ -325,10 +330,7 @@ async def health_check():
         overall_status = "degraded"
 
     return HealthResponse(
-        status=overall_status,
-        version=API_VERSION,
-        timestamp=datetime.now(),
-        checks=checks
+        status=overall_status, version=API_VERSION, timestamp=datetime.now(), checks=checks
     )
 
 
@@ -336,7 +338,7 @@ async def health_check():
     "/models",
     response_model=ModelsResponse,
     summary="Listar modelos disponíveis",
-    description="Retorna lista de modelos LLM disponíveis via OpenRouter"
+    description="Retorna lista de modelos LLM disponíveis via OpenRouter",
 )
 async def list_models():
     """
@@ -364,8 +366,8 @@ async def list_models():
         {
             "models": [
                 {
-                    "id": "gpt-oss-120b",
-                    "name": "GPT OSS 120B",
+                    "id": "openai/gpt-4o-mini",
+                    "name": "GPT 4o Mini",
                     "provider": "Together",
                     "input_cost_per_1k": 0.10,
                     "output_cost_per_1k": 0.20,
@@ -383,13 +385,13 @@ async def list_models():
 
     models = [
         ModelInfo(
-            id="gpt-oss-120b",
-            name="GPT OSS 120B",
+            id="openai/gpt-4o-mini",
+            name="GPT 4o Mini",
             provider="Together",
             input_cost_per_1k=0.10,
             output_cost_per_1k=0.20,
             context_window=4096,
-            description="Modelo open-source econômico e rápido, ideal para tarefas gerais"
+            description="Modelo mais rápido e barato da OpenAI com ótimo custo-benefício",
         ),
         ModelInfo(
             id="anthropic/claude-3.5-sonnet",
@@ -398,7 +400,7 @@ async def list_models():
             input_cost_per_1k=3.00,
             output_cost_per_1k=15.00,
             context_window=200000,
-            description="Modelo premium da Anthropic, excelente para tarefas complexas e contextos longos"
+            description="Modelo premium da Anthropic, excelente para tarefas complexas e contextos longos",
         ),
         ModelInfo(
             id="openai/gpt-4-turbo",
@@ -407,7 +409,7 @@ async def list_models():
             input_cost_per_1k=10.00,
             output_cost_per_1k=30.00,
             context_window=128000,
-            description="GPT-4 otimizado, alta performance para tarefas complexas"
+            description="GPT-4 otimizado, alta performance para tarefas complexas",
         ),
         ModelInfo(
             id="openai/gpt-3.5-turbo",
@@ -416,7 +418,7 @@ async def list_models():
             input_cost_per_1k=0.50,
             output_cost_per_1k=1.50,
             context_window=16385,
-            description="Modelo econômico da OpenAI, bom custo-benefício"
+            description="Modelo econômico da OpenAI, bom custo-benefício",
         ),
         ModelInfo(
             id="meta-llama/llama-3-70b-instruct",
@@ -425,14 +427,11 @@ async def list_models():
             input_cost_per_1k=0.70,
             output_cost_per_1k=0.90,
             context_window=8192,
-            description="Modelo open-source da Meta, bom para instruction following"
+            description="Modelo open-source da Meta, bom para instruction following",
         ),
     ]
 
-    return ModelsResponse(
-        models=models,
-        total=len(models)
-    )
+    return ModelsResponse(models=models, total=len(models))
 
 
 @app.post(
@@ -444,8 +443,8 @@ async def list_models():
         200: {"description": "Resposta gerada com sucesso"},
         400: {"description": "Request inválido"},
         429: {"description": "Limite diário de custo excedido"},
-        500: {"description": "Erro interno do servidor"}
-    }
+        500: {"description": "Erro interno do servidor"},
+    },
 )
 async def chat_completion(request: ChatRequest, http_request: Request):
     """
@@ -479,7 +478,7 @@ async def chat_completion(request: ChatRequest, http_request: Request):
             "messages": [
                 {"role": "user", "content": "Qual a cotação da PETR4?"}
             ],
-            "model": "gpt-oss-120b",
+            "model": "openai/gpt-4o-mini",
             "temperature": 0.7
         }
 
@@ -489,7 +488,7 @@ async def chat_completion(request: ChatRequest, http_request: Request):
                 "role": "assistant",
                 "content": "A cotação atual da PETR4 é..."
             },
-            "model": "gpt-oss-120b",
+            "model": "openai/gpt-4o-mini",
             "usage": {
                 "prompt_tokens": 15,
                 "completion_tokens": 30,
@@ -523,8 +522,7 @@ async def chat_completion(request: ChatRequest, http_request: Request):
             # Detecta se há PII
             if masker.has_pii(msg.content):
                 logger.warning(
-                    f"[{request_id}] PII detectado: "
-                    f"{masker.detect_pii_types(msg.content)}"
+                    f"[{request_id}] PII detectado: {masker.detect_pii_types(msg.content)}"
                 )
 
             # Mascara conteúdo
@@ -553,13 +551,12 @@ async def chat_completion(request: ChatRequest, http_request: Request):
         cost_usd = limiter.calculate_cost(
             model=request.model,
             prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens
+            completion_tokens=usage.completion_tokens,
         )
 
         # ========== 4. REGISTRA LOG NO BANCO ==========
 
         db = get_async_db()
-        await db.connect()
 
         # Log da interação
         log_query = """
@@ -589,18 +586,13 @@ async def chat_completion(request: ChatRequest, http_request: Request):
                 usage.completion_tokens,
                 cost_usd,
                 latency_ms,
-                "success"
+                "success",
             )
 
         # Registra custo
         await limiter.record_spend(
-            api_key=api_key or None,
-            model=request.model,
-            cost_usd=cost_usd,
-            db=db
+            api_key=api_key or None, model=request.model, cost_usd=cost_usd, db=db
         )
-
-        await db.disconnect()
 
         # ========== 5. RETORNA RESPOSTA ==========
 
@@ -618,22 +610,18 @@ async def chat_completion(request: ChatRequest, http_request: Request):
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             created_at=datetime.now(),
-            request_id=request_id
+            request_id=request_id,
         )
 
     except Exception as e:
         # Log do erro
         latency_ms = int((time.time() - start_time) * 1000)
 
-        logger.error(
-            f"[{request_id}] Erro no chat completion: {e}",
-            exc_info=True
-        )
+        logger.error(f"[{request_id}] Erro no chat completion: {e}", exc_info=True)
 
         # Tenta registrar erro no banco
         try:
             db = get_async_db()
-            await db.connect()
 
             log_query = """
                 INSERT INTO observability.llm_logs (
@@ -652,18 +640,13 @@ async def chat_completion(request: ChatRequest, http_request: Request):
                     "error",
                     str(e),
                     latency_ms,
-                    "error"
+                    "error",
                 )
-
-            await db.disconnect()
-        except Exception as log_e:
+        except Exception:
             pass  # Se logging falhar, não quebra a resposta de erro
 
         # Levanta HTTPException
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
 # ========== MAIN (para execução local) ==========
@@ -678,6 +661,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,  # Hot reload em desenvolvimento
-        log_level="info"
+        log_level="info",
     )
-

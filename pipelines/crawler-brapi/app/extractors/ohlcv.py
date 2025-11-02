@@ -49,7 +49,3 @@ async def extract_ohlcv(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídos {len(ohlcv_records)} registros OHLCV")
     return ohlcv_records
-
-
-
-

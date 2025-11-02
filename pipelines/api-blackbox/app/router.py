@@ -22,16 +22,16 @@ Como funciona:
 Documentação OpenRouter: https://openrouter.ai/docs
 """
 
+import json
 import os
 from collections.abc import AsyncGenerator
 
 import httpx
+from models import ChatMessage, ChatRequest, UsageInfo
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from llmops_lab.logging.logger import get_logger
 from llmops_lab.secrets.manager import get_secret
-
-from .models import ChatMessage, ChatRequest, UsageInfo
 
 logger = get_logger(__name__)
 
@@ -75,8 +75,7 @@ class OpenRouterClient:
 
         if not self.api_key:
             raise ValueError(
-                "OPENROUTER_API_KEY não encontrada. "
-                "Configure em .env ou Secret Manager."
+                "OPENROUTER_API_KEY não encontrada. Configure em .env ou Secret Manager."
             )
 
         # Cria cliente HTTP
@@ -88,7 +87,7 @@ class OpenRouterClient:
                 "HTTP-Referer": os.getenv("APP_URL", "http://localhost:8000"),
                 "X-Title": "LLMOps Lab - API Blackbox",
             },
-            timeout=60.0  # Timeout de 60s (LLMs podem demorar)
+            timeout=60.0,  # Timeout de 60s (LLMs podem demorar)
         )
 
         logger.info("OpenRouterClient inicializado")
@@ -131,23 +130,16 @@ class OpenRouterClient:
             [{"role": "user", "content": "Olá!"}]
         """
         return [
-            {
-                "role": msg.role,
-                "content": msg.content,
-                **({"name": msg.name} if msg.name else {})
-            }
+            {"role": msg.role, "content": msg.content, **({"name": msg.name} if msg.name else {})}
             for msg in messages
         ]
 
     @retry(
         stop=stop_after_attempt(3),  # Máximo 3 tentativas
         wait=wait_exponential(multiplier=1, min=2, max=10),  # Backoff exponencial
-        reraise=True  # Re-levanta exceção após todas as tentativas
+        reraise=True,  # Re-levanta exceção após todas as tentativas
     )
-    async def chat_completion(
-        self,
-        request: ChatRequest
-    ) -> dict:
+    async def chat_completion(self, request: ChatRequest) -> dict:
         """
         Cria uma chat completion via OpenRouter
 
@@ -175,7 +167,7 @@ class OpenRouterClient:
             >>> client = OpenRouterClient()
             >>> req = ChatRequest(
             ...     messages=[ChatMessage(role="user", content="Olá!")],
-            ...     model="gpt-oss-120b"
+            ...     model="openai/gpt-4o-mini"
             ... )
             >>> resp = await client.chat_completion(req)
             >>> print(resp["choices"][0]["message"]["content"])
@@ -199,10 +191,7 @@ class OpenRouterClient:
 
         try:
             # POST /chat/completions
-            response = await self.client.post(
-                "/chat/completions",
-                json=payload
-            )
+            response = await self.client.post("/chat/completions", json=payload)
 
             # Levanta exceção se status 4xx ou 5xx
             response.raise_for_status()
@@ -219,21 +208,17 @@ class OpenRouterClient:
 
         except httpx.HTTPStatusError as e:
             # Erros HTTP (400, 401, 403, 404, 429, 500, etc)
-            logger.error(
-                f"HTTP Error {e.response.status_code}: {e.response.text}"
-            )
+            logger.error(f"HTTP Error {e.response.status_code}: {e.response.text}")
 
             # Parse erro do OpenRouter
             try:
                 error_data = e.response.json()
                 error_msg = error_data.get("error", {}).get("message", str(e))
-            except json.JSONDecodeError as json_e:
+            except json.JSONDecodeError:
                 error_msg = e.response.text
 
             # Re-levanta com mensagem clara
-            raise Exception(
-                f"OpenRouter API Error ({e.response.status_code}): {error_msg}"
-            ) from e
+            raise Exception(f"OpenRouter API Error ({e.response.status_code}): {error_msg}") from e
 
         except httpx.TimeoutException as e:
             logger.error(f"Timeout ao chamar OpenRouter: {e}")
@@ -243,10 +228,7 @@ class OpenRouterClient:
             logger.error(f"Erro inesperado ao chamar OpenRouter: {e}")
             raise
 
-    async def chat_completion_stream(
-        self,
-        request: ChatRequest
-    ) -> AsyncGenerator[dict, None]:
+    async def chat_completion_stream(self, request: ChatRequest) -> AsyncGenerator[dict, None]:
         """
         Cria chat completion com streaming (Server-Sent Events)
 
@@ -272,7 +254,7 @@ class OpenRouterClient:
             >>> client = OpenRouterClient()
             >>> req = ChatRequest(
             ...     messages=[ChatMessage(role="user", content="Conte até 5")],
-            ...     model="gpt-oss-120b",
+            ...     model="openai/gpt-4o-mini",
             ...     stream=True
             ... )
             >>> async for chunk in client.chat_completion_stream(req):
@@ -299,11 +281,7 @@ class OpenRouterClient:
 
         try:
             # Stream context
-            async with self.client.stream(
-                "POST",
-                "/chat/completions",
-                json=payload
-            ) as response:
+            async with self.client.stream("POST", "/chat/completions", json=payload) as response:
                 response.raise_for_status()
 
                 # Lê linha por linha (SSE)
@@ -319,9 +297,10 @@ class OpenRouterClient:
                         # Parse JSON
                         try:
                             import json
+
                             chunk = json.loads(data)
                             yield chunk
-                        except json.JSONDecodeError as json_e:
+                        except json.JSONDecodeError:
                             continue
 
         except Exception as e:
@@ -358,7 +337,7 @@ class OpenRouterClient:
         return UsageInfo(
             prompt_tokens=usage_data.get("prompt_tokens", 0),
             completion_tokens=usage_data.get("completion_tokens", 0),
-            total_tokens=usage_data.get("total_tokens", 0)
+            total_tokens=usage_data.get("total_tokens", 0),
         )
 
     def extract_message(self, response: dict) -> ChatMessage:
@@ -394,14 +373,26 @@ class OpenRouterClient:
         choice = response["choices"][0]
         message_data = choice["message"]
 
+        # Validação defensiva: conteúdo não pode estar vazio
+        content = message_data.get("content", "").strip()
+        if not content:
+            logger.error(
+                f"Modelo retornou resposta vazia! "
+                f"Model: {response.get('model')}, "
+                f"Finish reason: {choice.get('finish_reason')}"
+            )
+            raise ValueError(
+                "O modelo retornou uma resposta vazia. "
+                "Isso pode indicar um problema com o prompt ou com o modelo escolhido."
+            )
+
         return ChatMessage(
-            role=message_data["role"],
-            content=message_data["content"],
-            name=message_data.get("name")
+            role=message_data["role"], content=content, name=message_data.get("name")
         )
 
 
 # ========== FUNÇÃO HELPER ==========
+
 
 async def create_openrouter_client() -> OpenRouterClient:
     """
@@ -424,4 +415,3 @@ async def create_openrouter_client() -> OpenRouterClient:
         ...     return response
     """
     return OpenRouterClient()
-

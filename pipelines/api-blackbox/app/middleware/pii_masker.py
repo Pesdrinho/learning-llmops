@@ -59,9 +59,7 @@ class PIIMasker:
         #   \d{3}       = 3 dígitos
         #   -?          = hífen opcional
         #   \d{2}       = 2 dígitos verificadores
-        self.cpf_pattern: Pattern = re.compile(
-            r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b'
-        )
+        self.cpf_pattern: Pattern = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")
 
         # ========== CNPJ ==========
         # Formato: 12.345.678/0001-00 ou 12345678000100
@@ -75,9 +73,7 @@ class PIIMasker:
         #   \d{4}       = 4 dígitos (filial)
         #   -?          = hífen opcional
         #   \d{2}       = 2 dígitos verificadores
-        self.cnpj_pattern: Pattern = re.compile(
-            r'\b\d{2}\.?\d{3}\.?\d{3}/?\.?\d{4}-?\d{2}\b'
-        )
+        self.cnpj_pattern: Pattern = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\.?\d{4}-?\d{2}\b")
 
         # ========== EMAIL ==========
         # Formato: usuario@dominio.com
@@ -88,8 +84,7 @@ class PIIMasker:
         #   \.                 = ponto antes da extensão
         #   [a-zA-Z]{2,}       = extensão (mín. 2 caracteres)
         self.email_pattern: Pattern = re.compile(
-            r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
-            re.IGNORECASE
+            r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b", re.IGNORECASE
         )
 
         # ========== TELEFONE ==========
@@ -108,16 +103,14 @@ class PIIMasker:
         #   \d{4,5}            = 4 ou 5 dígitos (fixo ou celular)
         #   -?                 = hífen opcional
         #   \d{4}              = 4 dígitos finais
-        self.phone_pattern: Pattern = re.compile(
-            r'(\+55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}\b'
-        )
+        self.phone_pattern: Pattern = re.compile(r"(\+55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}\b")
 
         # Compilação de todos os patterns para fácil acesso
         self.patterns = {
-            'cpf': self.cpf_pattern,
-            'cnpj': self.cnpj_pattern,
-            'email': self.email_pattern,
-            'phone': self.phone_pattern,
+            "cpf": self.cpf_pattern,
+            "cnpj": self.cnpj_pattern,
+            "email": self.email_pattern,
+            "phone": self.phone_pattern,
         }
 
     def mask_cpf(self, text: str) -> str:
@@ -138,10 +131,11 @@ class PIIMasker:
             >>> masker.mask_cpf("CPF: 123.456.789-00")
             "CPF: ***.***.***-**"
         """
+
         def replacer(match):
             cpf = match.group(0)
             # Preserva pontuação, mascara dígitos
-            masked = re.sub(r'\d', '*', cpf)
+            masked = re.sub(r"\d", "*", cpf)
             return masked
 
         return self.cpf_pattern.sub(replacer, text)
@@ -163,9 +157,10 @@ class PIIMasker:
             >>> masker.mask_cnpj("CNPJ: 12.345.678/0001-00")
             "CNPJ: **.***.***/****-**"
         """
+
         def replacer(match):
             cnpj = match.group(0)
-            masked = re.sub(r'\d', '*', cnpj)
+            masked = re.sub(r"\d", "*", cnpj)
             return masked
 
         return self.cnpj_pattern.sub(replacer, text)
@@ -188,21 +183,22 @@ class PIIMasker:
             >>> masker.mask_email("Email: user@example.com")
             "Email: ***@***.***"
         """
+
         def replacer(match):
             email = match.group(0)
             # Divide em usuário e domínio
-            if '@' in email:
-                user, domain = email.split('@', 1)
+            if "@" in email:
+                user, domain = email.split("@", 1)
                 # Mascara usuário completamente
-                masked_user = '*' * min(len(user), 3)
+                masked_user = "*" * min(len(user), 3)
                 # Mascara domínio, preservando extensão
-                if '.' in domain:
-                    domain_parts = domain.split('.')
-                    masked_domain = '.'.join(['***'] * len(domain_parts))
+                if "." in domain:
+                    domain_parts = domain.split(".")
+                    masked_domain = ".".join(["***"] * len(domain_parts))
                 else:
-                    masked_domain = '***'
+                    masked_domain = "***"
                 return f"{masked_user}@{masked_domain}"
-            return '***'
+            return "***"
 
         return self.email_pattern.sub(replacer, text)
 
@@ -223,14 +219,15 @@ class PIIMasker:
             >>> masker.mask_phone("Tel: (11) 98765-4321")
             "Tel: (11) *****-****"
         """
+
         def replacer(match):
             phone = match.group(0)
             # Preserva código do país e DDD, mascara resto
             # (11) 98765-4321 → (11) *****-****
             masked = re.sub(
-                r'(\+55\s?)?(\(?\d{2}\)?\s?)(\d{4,5}-?\d{4})',
-                lambda m: (m.group(1) or '') + (m.group(2) or '') + re.sub(r'\d', '*', m.group(3)),
-                phone
+                r"(\+55\s?)?(\(?\d{2}\)?\s?)(\d{4,5}-?\d{4})",
+                lambda m: (m.group(1) or "") + (m.group(2) or "") + re.sub(r"\d", "*", m.group(3)),
+                phone,
             )
             return masked
 
@@ -336,6 +333,7 @@ masker = PIIMasker()
 
 # ========== FUNÇÕES DE CONVENIÊNCIA ==========
 
+
 def mask_text(text: str) -> str:
     """
     Função helper para mascarar texto rapidamente
@@ -372,4 +370,3 @@ def has_pii(text: str) -> bool:
         False
     """
     return masker.has_pii(text)
-

@@ -33,9 +33,7 @@ class BrapiClient:
         self.max_retries = max_retries
 
         # Headers padrão
-        self.headers = {
-            "User-Agent": "LLMOps-Lab-Crawler/0.1.0"
-        }
+        self.headers = {"User-Agent": "LLMOps-Lab-Crawler/0.1.0"}
 
         if self.api_token:
             self.headers["Authorization"] = f"Bearer {self.api_token}"
@@ -70,16 +68,10 @@ class BrapiClient:
             logger.info("Cliente Brapi fechado")
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True
+        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True
     )
     async def _request(
-        self,
-        method: str,
-        endpoint: str,
-        params: dict | None = None,
-        **kwargs
+        self, method: str, endpoint: str, params: dict | None = None, **kwargs
     ) -> dict[str, Any]:
         """
         Faz request HTTP com retry
@@ -98,10 +90,7 @@ class BrapiClient:
 
         try:
             response = await self._client.request(
-                method=method,
-                url=endpoint,
-                params=params,
-                **kwargs
+                method=method, url=endpoint, params=params, **kwargs
             )
             response.raise_for_status()
 
@@ -121,10 +110,7 @@ class BrapiClient:
     # ========== Métodos específicos da API ==========
 
     async def get_available_tickers(
-        self,
-        search: str | None = None,
-        sector: str | None = None,
-        limit: int = 100
+        self, search: str | None = None, sector: str | None = None, limit: int = 100
     ) -> dict[str, Any]:
         """
         Lista tickers disponíveis
@@ -159,10 +145,7 @@ class BrapiClient:
         return await self.get(f"/quote/{tickers_str}")
 
     async def get_quote_list(
-        self,
-        sortBy: str = "volume",
-        sortOrder: str = "desc",
-        limit: int = 10
+        self, sortBy: str = "volume", sortOrder: str = "desc", limit: int = 10
     ) -> dict[str, Any]:
         """
         Lista cotações ordenadas
@@ -175,11 +158,7 @@ class BrapiClient:
         Returns:
             Lista de cotações
         """
-        params = {
-            "sortBy": sortBy,
-            "sortOrder": sortOrder,
-            "limit": limit
-        }
+        params = {"sortBy": sortBy, "sortOrder": sortOrder, "limit": limit}
         return await self.get("/quote/list", params=params)
 
     async def get_historical_data(
@@ -188,7 +167,7 @@ class BrapiClient:
         range: str = "1mo",
         interval: str = "1d",
         fundamental: bool = False,
-        dividends: bool = False
+        dividends: bool = False,
     ) -> dict[str, Any]:
         """
         Obtém dados históricos (OHLCV)
@@ -207,7 +186,7 @@ class BrapiClient:
             "range": range,
             "interval": interval,
             "fundamental": str(fundamental).lower(),
-            "dividends": str(dividends).lower()
+            "dividends": str(dividends).lower(),
         }
         return await self.get(f"/quote/{ticker}", params=params)
 
@@ -227,11 +206,7 @@ class BrapiClient:
         """Lista moedas disponíveis"""
         return await self.get("/v2/currency/available")
 
-    async def get_crypto(
-        self,
-        coin: str | None = None,
-        currency: str = "BRL"
-    ) -> dict[str, Any]:
+    async def get_crypto(self, coin: str | None = None, currency: str = "BRL") -> dict[str, Any]:
         """
         Obtém preços de criptomoedas
 
@@ -253,7 +228,7 @@ class BrapiClient:
         country: str = "brazil",
         start: str | None = None,
         end: str | None = None,
-        sortOrder: str = "desc"
+        sortOrder: str = "desc",
     ) -> dict[str, Any]:
         """
         Obtém dados de inflação (IPCA)
@@ -280,7 +255,7 @@ class BrapiClient:
         country: str = "brazil",
         start: str | None = None,
         end: str | None = None,
-        sortOrder: str = "desc"
+        sortOrder: str = "desc",
     ) -> dict[str, Any]:
         """
         Obtém dados da taxa SELIC
@@ -324,13 +299,9 @@ async def get_brapi_client() -> BrapiClient:
     token = None
     try:
         token = get_secret("BRAPI_TOKEN", default=None)
-    except:
+    except Exception:
         logger.warning("BRAPI_TOKEN não configurado, usando endpoints públicos")
 
     client = BrapiClient(api_token=token)
     await client.connect()
     return client
-
-
-
-

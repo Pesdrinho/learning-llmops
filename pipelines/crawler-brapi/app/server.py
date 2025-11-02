@@ -41,11 +41,7 @@ app = FastAPI(
 @app.get("/")
 async def root():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "crawler-brapi",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy", "service": "crawler-brapi", "version": "1.0.0"}
 
 
 @app.get("/health")
@@ -79,16 +75,13 @@ async def run_crawler(sample: bool = False):
             content={
                 "status": "success",
                 "message": "Crawler executado com sucesso",
-                "mode": "sample" if sample else "full"
-            }
+                "mode": "sample" if sample else "full",
+            },
         )
 
     except Exception as e:
         logger.error(f"Erro ao executar crawler: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao executar crawler: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Erro ao executar crawler: {str(e)}") from e
 
 
 @app.post("/run/sample")
@@ -108,10 +101,4 @@ if __name__ == "__main__":
 
     port = int(os.getenv("PORT", "8080"))
 
-    uvicorn.run(
-        "server:app",
-        host="0.0.0.0",
-        port=port,
-        log_level="info"
-    )
-
+    uvicorn.run("server:app", host="0.0.0.0", port=port, log_level="info")

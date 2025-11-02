@@ -41,7 +41,3 @@ async def extract_crypto(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídos {len(crypto_prices)} preços de cripto")
     return crypto_prices
-
-
-
-

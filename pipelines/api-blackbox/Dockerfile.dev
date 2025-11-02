@@ -1,5 +1,5 @@
 # Dockerfile de Desenvolvimento - API Blackbox
-# 
+#
 # Este Dockerfile é otimizado para desenvolvimento local:
 # - Hot reload (código atualiza automaticamente)
 # - Debug facilitado
@@ -24,27 +24,33 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copia pyproject.toml para instalar dependências
-COPY pyproject.toml ./
+COPY pipelines/api-blackbox/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Instala dependências Python
-# --no-cache-dir: Não armazena cache (reduz tamanho da imagem)
-# -e .: Instala em modo editável (permite hot reload)
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e .
-
-# Copia código-fonte
-# Ordem importa: dependências primeiro (cache do Docker)
 COPY llmops_lab llmops_lab/
 COPY pipelines/api-blackbox pipelines/api-blackbox/
 
-# Variáveis de ambiente
+# Copia arquivo .env da raiz do projeto
+COPY ../../.env .env
+
+# Variáveis de ambiente para desenvolvimento
+# Valores padrão para desenvolvimento local
 ENV PYTHONUNBUFFERED=1 \
     APP_ENV=development \
-    PORT=8000 \
-    PYTHONPATH=/app
+    LOG_LEVEL=DEBUG \
+    DEBUG=true \
+    PORT=9000 \
+    PYTHONPATH=/app \
+    DB_HOST=34.61.66.212 \
+    DB_PORT=5432 \
+    DB_USER=postgres \
+    DB_PASSWORD='i<sy9[)\=Ms[y\1v' \
+    DB_NAME=postgres \
+    USE_CLOUD_SQL_PROXY=false \
+    DB_CONNECTION_NAME=""
 
 # Porta exposta
-EXPOSE 8000
+EXPOSE 9000
 
 # Workdir final
 WORKDIR /app/pipelines/api-blackbox/app
@@ -53,5 +59,4 @@ WORKDIR /app/pipelines/api-blackbox/app
 # --reload: Hot reload (recarrega ao detectar mudanças)
 # --host 0.0.0.0: Aceita conexões de qualquer IP
 # --log-level info: Logs informativos
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "info"]
-
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000", "--reload", "--log-level", "info"]

@@ -2,7 +2,6 @@
 Loaders para inserir/upsert dados no Cloud SQL
 """
 
-
 from llmops_lab.db.connectors import AsyncDatabaseConnection
 from llmops_lab.logging.logger import get_logger
 
@@ -272,7 +271,3 @@ async def upsert_selic(db: AsyncDatabaseConnection, selic_records: list[dict]):
                 logger.error(f"Erro ao inserir SELIC: {e}")
 
     logger.info(f"Upsert de {len(selic_records)} registros de SELIC completo")
-
-
-
-

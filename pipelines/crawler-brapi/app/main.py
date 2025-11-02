@@ -43,7 +43,7 @@ async def crawl_quotes(client, db, tickers: list[str]):
         # Busca cotações em lotes de 50
         batch_size = 50
         for i in range(0, len(tickers), batch_size):
-            batch = tickers[i:i + batch_size]
+            batch = tickers[i : i + batch_size]
             data = await client.get_quote(batch)
 
             # Extrai e salva
@@ -68,11 +68,7 @@ async def crawl_historical(client, db, ticker: str, range: str = "1mo"):
     logger.info(f"Coletando histórico de {ticker}")
 
     try:
-        data = await client.get_historical_data(
-            ticker=ticker,
-            range=range,
-            dividends=True
-        )
+        data = await client.get_historical_data(ticker=ticker, range=range, dividends=True)
 
         # Extrai OHLCV
         ohlcv_data = await ohlcv.extract_ohlcv(data)
@@ -130,10 +126,7 @@ async def crawl_inflation(client, db):
         end_date = datetime.now().strftime("%d/%m/%Y")
         start_date = (datetime.now() - timedelta(days=365)).strftime("%d/%m/%Y")
 
-        data = await client.get_inflation(
-            start=start_date,
-            end=end_date
-        )
+        data = await client.get_inflation(start=start_date, end=end_date)
 
         inflation_data = await inflation.extract_inflation(data)
         await upsert_inflation(db, inflation_data)
@@ -153,10 +146,7 @@ async def crawl_selic(client, db):
         end_date = datetime.now().strftime("%d/%m/%Y")
         start_date = (datetime.now() - timedelta(days=365)).strftime("%d/%m/%Y")
 
-        data = await client.get_prime_rate(
-            start=start_date,
-            end=end_date
-        )
+        data = await client.get_prime_rate(start=start_date, end=end_date)
 
         selic_data = await inflation.extract_selic(data)
         await upsert_selic(db, selic_data)
@@ -251,9 +241,7 @@ async def main():
 
     parser = argparse.ArgumentParser(description="Crawler Brapi")
     parser.add_argument(
-        "--sample",
-        action="store_true",
-        help="Executa em modo sample (poucos dados para teste)"
+        "--sample", action="store_true", help="Executa em modo sample (poucos dados para teste)"
     )
 
     args = parser.parse_args()
@@ -263,7 +251,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-

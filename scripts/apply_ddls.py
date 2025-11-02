@@ -5,6 +5,8 @@ from pathlib import Path
 # Adiciona o diretório raiz ao path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sqlalchemy import text
+
 from llmops_lab.db.connectors import SyncDatabaseConnection
 from llmops_lab.logging.logger import get_logger
 
@@ -22,23 +24,18 @@ def apply_ddl(db: SyncDatabaseConnection, sql_file: Path):
     logger.info(f"Aplicando DDL: {sql_file.name}")
 
     try:
-        with open(sql_file) as f:
+        with open(sql_file, encoding="utf-8") as f:
             sql = f.read()
 
-        # Executa SQL
+        # Executa SQL completo de uma vez
         with db.engine.connect() as conn:
-            # Split por ; para executar statements separadamente
-            statements = [s.strip() for s in sql.split(";") if s.strip()]
+            conn.execute(text(sql))
+            conn.commit()
 
-            for statement in statements:
-                if statement:
-                    conn.execute(statement)
-                    conn.commit()
-
-        logger.info(f"✓ {sql_file.name} aplicado com sucesso")
+        logger.info(f"OK {sql_file.name} aplicado com sucesso")
 
     except Exception as e:
-        logger.error(f"✗ Erro ao aplicar {sql_file.name}: {e}")
+        logger.error(f"ERRO ao aplicar {sql_file.name}: {e}")
         raise
 
 

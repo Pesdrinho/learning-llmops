@@ -5,7 +5,6 @@ Conectores de Banco de Dados - Cloud SQL e Local
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import cast
 
 import asyncpg
 from sqlalchemy import create_engine
@@ -22,63 +21,66 @@ Base = declarative_base()
 
 
 class DatabaseConfig:
-    """Configuração de banco de dados"""
+    """Configuração simplificada - parâmetros diretos sem URL"""
 
     def __init__(self):
         self.env = os.getenv("APP_ENV", "development")
-        self.use_cloud_sql_proxy = os.getenv("USE_CLOUD_SQL_PROXY", "false").lower() == "true"
 
-        # Carrega variáveis individuais primeiro
-        self.db_connection_name: str = os.getenv("DB_CONNECTION_NAME", "")
-        self.db_user: str = os.getenv("DB_USER", "llmops_user")
-        self.db_password: str = os.getenv("DB_PASSWORD", "")
-        self.db_name: str = os.getenv("DB_NAME", "llmops")
-        self.db_host: str = os.getenv("DB_HOST", "localhost")
-        self.db_port: str = os.getenv("DB_PORT", "5432")
+        # Carrega secrets
+        sm = secrets.get_secrets_manager()
 
-        # URLs de conexão (tenta do secrets, valida antes de usar)
-        database_url_async_raw = secrets.get_secret("DATABASE_URL", None)
-        database_url_sync_raw = secrets.get_secret("DATABASE_URL_SYNC", None)
+        # Credenciais obrigatórias
+        self.user = sm.get_secret("DB_USER", os.getenv("DB_USER", "postgres"))
+        self.password = sm.get_secret("DB_PASSWORD", os.getenv("DB_PASSWORD", ""))
+        self.database = sm.get_secret("DB_NAME", os.getenv("DB_NAME", "postgres"))
 
-        # Só usa se for válida (não contém ${} não expandidos e tem formato correto)
-        self.database_url_async: str = ""
-        self.database_url_sync: str = ""
+        # Configuração de conexão
+        self.connection_name = sm.get_secret(
+            "DB_CONNECTION_NAME", os.getenv("DB_CONNECTION_NAME", "")
+        )
+        self.use_cloud_sql = bool(self.connection_name and self.env == "production")
 
-        if (
-            database_url_async_raw
-            and "${" not in database_url_async_raw
-            and "@" in database_url_async_raw
-        ):
-            self.database_url_async = cast(str, database_url_async_raw)
+        # Host/Port (só para desenvolvimento)
+        if self.use_cloud_sql:
+            # Cloud SQL via Unix Socket
+            self.host = f"/cloudsql/{self.connection_name}"
+            self.port = None
+            logger.info(f"[Cloud SQL Socket] {self.connection_name}")
+        else:
+            # Local/TCP
+            self.host = sm.get_secret("DB_HOST", os.getenv("DB_HOST", "localhost"))
+            self.port = int(sm.get_secret("DB_PORT", os.getenv("DB_PORT", "5432")))
+            logger.info(f"[TCP] {self.host}:{self.port}")
 
-        if (
-            database_url_sync_raw
-            and "${" not in database_url_sync_raw
-            and "@" in database_url_sync_raw
-        ):
-            self.database_url_sync = cast(str, database_url_sync_raw)
+        # Validação
+        if not self.password:
+            raise ValueError("DB_PASSWORD não configurado!")
 
-    def get_async_url(self) -> str:
-        """Retorna URL async"""
-        if self.database_url_async:
-            return self.database_url_async
+        logger.info(
+            f"DB Config: user={self.user}, db={self.database}, cloud_sql={self.use_cloud_sql}"
+        )
 
-        # Fallback para construção manual
-        if self.use_cloud_sql_proxy:
-            return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@/cloudsql/{self.db_connection_name}/{self.db_name}"
+    def get_async_params(self) -> dict:
+        """Retorna parâmetros para asyncpg.create_pool()"""
+        params = {
+            "user": self.user,
+            "password": self.password,
+            "database": self.database,
+            "host": self.host,
+            "timeout": 60,  # Timeout generoso para Cloud SQL
+        }
 
-        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        # Só adiciona port se não for Unix socket
+        if self.port:
+            params["port"] = self.port
 
-    def get_sync_url(self) -> str:
-        """Retorna URL síncrona"""
-        if self.database_url_sync:
-            return self.database_url_sync
+        return params
 
-        # Fallback para construção manual
-        if self.use_cloud_sql_proxy:
-            return f"postgresql://{self.db_user}:{self.db_password}@/cloudsql/{self.db_connection_name}/{self.db_name}"
-
-        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+    def get_sqlalchemy_url(self) -> str:
+        """Retorna URL para SQLAlchemy (fallback)"""
+        if self.use_cloud_sql:
+            return f"postgresql+asyncpg://{self.user}:{self.password}@/{self.database}?host={self.host}"
+        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
 class AsyncDatabaseConnection:
@@ -93,18 +95,23 @@ class AsyncDatabaseConnection:
     async def connect(self):
         """Cria pool de conexões"""
         if self._pool is None:
-            url = self.config.get_async_url()
-            logger.info(f"Conectando ao banco de dados (async): {url.split('@')[1]}")
+            # Parâmetros diretos (sem URL)
+            params = self.config.get_async_params()
 
-            # Pool asyncpg para queries diretas
-            self._pool = await asyncpg.create_pool(
-                url.replace("postgresql+asyncpg://", "postgresql://"),
-                min_size=2,
-                max_size=10,
-                command_timeout=60,
+            logger.info(
+                f"Conectando: host={params['host']}, db={params['database']}, user={params['user']}"
             )
 
-            # Engine SQLAlchemy para ORM
+            # Pool asyncpg com parâmetros individuais
+            self._pool = await asyncpg.create_pool(
+                **params,
+                min_size=1,  # Reduz carga no startup
+                max_size=10,
+                command_timeout=90,
+            )
+
+            # Engine SQLAlchemy (fallback para ORM)
+            url = self.config.get_sqlalchemy_url()
             self._engine = create_async_engine(
                 url,
                 echo=os.getenv("DEBUG", "false").lower() == "true",
@@ -118,7 +125,7 @@ class AsyncDatabaseConnection:
                 expire_on_commit=False,
             )
 
-            logger.info("Conexão com banco estabelecida (async)")
+            logger.info("Conexao estabelecida (async)")
 
     async def disconnect(self):
         """Fecha pool de conexões"""
@@ -190,8 +197,12 @@ class SyncDatabaseConnection:
     def connect(self):
         """Cria engine"""
         if self._engine is None:
-            url = self.config.get_sync_url()
-            logger.info(f"Conectando ao banco de dados (sync): {url.split('@')[1]}")
+            url = self.config.get_sqlalchemy_url().replace("+asyncpg", "")
+
+            logger.info(
+                f"Conectando (sync): host={self.config.host}, "
+                f"db={self.config.database}, user={self.config.user}"
+            )
 
             self._engine = create_engine(
                 url,
@@ -201,7 +212,7 @@ class SyncDatabaseConnection:
 
             self._session_factory = sessionmaker(bind=self._engine)
 
-            logger.info("Conexão com banco estabelecida (sync)")
+            logger.info("Conexao estabelecida (sync)")
 
     def disconnect(self):
         """Fecha engine"""

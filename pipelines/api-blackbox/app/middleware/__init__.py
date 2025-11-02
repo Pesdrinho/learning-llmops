@@ -1,2 +1,1 @@
 """Middlewares para API Blackbox"""
-

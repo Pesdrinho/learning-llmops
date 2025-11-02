@@ -5,7 +5,7 @@ Este módulo implementa um gateway inteligente para modelos LLM via OpenRouter,
 incluindo funcionalidades essenciais de governança e observabilidade.
 
 Principais funcionalidades:
-- Roteamento para múltiplos modelos (gpt-oss-120b, claude-3.5-sonnet, etc)
+- Roteamento para múltiplos modelos (gpt-4o-mini, claude-3.5-sonnet, gemini, etc)
 - Mascaramento automático de PII (CPF, CNPJ, email, telefone)
 - Controle de custos com limite diário (US$15)
 - Logging completo de todas as interações
@@ -20,4 +20,3 @@ Arquitetura:
 """
 
 __version__ = "0.1.0"
-

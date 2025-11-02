@@ -58,7 +58,3 @@ async def extract_quotes(data: dict[str, Any]) -> list[dict]:
 
     logger.info(f"Extraídas {len(quotes)} cotações")
     return quotes
-
-
-
-

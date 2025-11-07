@@ -124,7 +124,7 @@ class SecretsManager:
 
             # Verifica se a resposta tem payload válido
             if response.payload and response.payload.data:
-                secret_value = response.payload.data.decode("UTF-8")
+                secret_value: str = response.payload.data.decode("UTF-8")
                 logger.debug(f"Secret '{secret_name}' recuperado do GCP Secret Manager")
                 return secret_value
             else:

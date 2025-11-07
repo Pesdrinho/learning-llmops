@@ -174,24 +174,26 @@ async def generate_dataset(request: DatasetGenerationRequest, http_request: Requ
         if not db.pool:
             await db.connect()
 
-        log_query = """
-            INSERT INTO observability.llm_logs (
-                user_id, model, provider,
-                prompt_masked, response_masked,
-                input_tokens, output_tokens, cost_usd,
-                latency_ms, status,
-                inference_type, prompt_version
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        """
-
         async with db.pool.acquire() as conn:
-            await conn.execute(
+            # 1. Log geral da geração
+            log_query = """
+                INSERT INTO observability.llm_logs (
+                    user_id, model, provider,
+                    prompt_masked, response_masked,
+                    input_tokens, output_tokens, cost_usd,
+                    latency_ms, status,
+                    inference_type, prompt_version
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                RETURNING id
+            """
+
+            log_result = await conn.fetchrow(
                 log_query,
                 request.user_id or "anonymous",
                 request.model,
                 "openrouter",
                 f"Tool: {request.tool_name}, Examples: {request.num_examples}",
-                f"Generated {len(examples)} examples",
+                json.dumps({"examples_count": len(examples), "format": request.output_format}),
                 usage.prompt_tokens,
                 usage.completion_tokens,
                 cost_usd,
@@ -201,6 +203,106 @@ async def generate_dataset(request: DatasetGenerationRequest, http_request: Requ
                 prompt_config.version,
             )
 
+            log_id = log_result["id"]
+
+            # 2. Salva cada exemplo na tabela de fine-tuning
+            ft_insert_query = """
+                INSERT INTO finetune.ft_pairs (
+                    prompt, output, meta, dataset, quality_score
+                ) VALUES ($1, $2, $3, $4, $5)
+            """
+
+            saved_count = 0
+            for idx, example in enumerate(examples):
+                # Debug: log estrutura do exemplo
+                logger.debug(
+                    f"[{request_id}] Processando exemplo {idx + 1}: "
+                    f"type={type(example)}, keys={list(example.keys()) if isinstance(example, dict) else 'N/A'}"
+                )
+
+                # Valida estrutura do exemplo
+                if not isinstance(example, dict) or "messages" not in example:
+                    logger.warning(
+                        f"[{request_id}] Exemplo {idx + 1} com estrutura inválida, pulando: {example}"
+                    )
+                    continue
+
+                messages = example.get("messages", [])
+                if not messages or not isinstance(messages, list):
+                    logger.warning(
+                        f"[{request_id}] Exemplo {idx + 1} sem mensagens válidas, pulando"
+                    )
+                    continue
+
+                # Extrai prompt (última mensagem do user)
+                user_messages = [
+                    msg for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"
+                ]
+                prompt_text = user_messages[-1].get("content", "").strip() if user_messages else ""
+
+                if not prompt_text:
+                    logger.warning(f"[{request_id}] Exemplo {idx + 1} sem prompt válido, pulando")
+                    continue
+
+                # Extrai tool calls do assistant
+                assistant_messages = [
+                    msg
+                    for msg in messages
+                    if isinstance(msg, dict) and msg.get("role") == "assistant"
+                ]
+
+                output_data = {}
+                if assistant_messages:
+                    last_assistant = assistant_messages[-1]
+                    if "tool_calls" in last_assistant and last_assistant["tool_calls"]:
+                        tool_call = last_assistant["tool_calls"][0]
+                        output_data = {
+                            "tool": tool_call.get("name", request.tool_name),
+                            "arguments": tool_call.get("arguments", {}),
+                        }
+
+                # Se não tem output válido, pula
+                if not output_data:
+                    logger.warning(
+                        f"[{request_id}] Exemplo {idx + 1} sem tool_calls válidos, pulando"
+                    )
+                    continue
+
+                # Metadados completos
+                meta = {
+                    "tool_name": request.tool_name,
+                    "model_used": request.model,
+                    "generation_request_id": request_id,
+                    "log_id": log_id,
+                    "example_index": idx,
+                    "diversity_level": request.diversity_level,
+                    "full_messages": messages,
+                }
+
+                # Insere no banco
+                try:
+                    await conn.execute(
+                        ft_insert_query,
+                        prompt_text,
+                        json.dumps(output_data, ensure_ascii=False),
+                        json.dumps(meta, ensure_ascii=False),
+                        "generated",
+                        None,
+                    )
+                    saved_count += 1
+                    logger.debug(
+                        f"[{request_id}] Exemplo {idx + 1} salvo com sucesso: "
+                        f"prompt_len={len(prompt_text)}, tool={output_data.get('tool')}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[{request_id}] Erro ao salvar exemplo {idx + 1}: {e}", exc_info=True
+                    )
+
+            logger.info(
+                f"[{request_id}] {saved_count}/{len(examples)} exemplos persistidos em finetune.ft_pairs"
+            )
+
         await limiter.record_spend(
             api_key=api_key or None, model=request.model, cost_usd=cost_usd, db=db
         )
@@ -208,9 +310,17 @@ async def generate_dataset(request: DatasetGenerationRequest, http_request: Requ
         logger.info(
             f"[{request_id}] Dataset generation concluído | "
             f"Exemplos gerados: {len(examples)} | "
+            f"Persistidos: {len(examples)} | "
             f"Custo: ${cost_usd:.6f} | "
             f"Latência: {latency_ms}ms"
         )
+
+        # Log de amostra dos exemplos para auditoria
+        for i, example in enumerate(examples[:3]):  # Log primeiros 3 exemplos
+            logger.debug(
+                f"[{request_id}] Exemplo {i + 1}/{len(examples)}: "
+                f"{json.dumps(example, ensure_ascii=False)[:300]}..."
+            )
 
         return DatasetGenerationResponse(
             examples=examples,

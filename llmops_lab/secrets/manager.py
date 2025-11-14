@@ -3,12 +3,36 @@ Gerenciador de Segredos - Secret Manager (GCP) + .env fallback
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from llmops_lab.logging.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _find_env_file() -> Path | None:
+    """
+    Encontra o arquivo .env procurando na raiz do projeto
+
+    Returns:
+        Caminho do arquivo .env ou None se não encontrado
+    """
+    # Procura a partir do diretório atual até a raiz
+    current = Path.cwd()
+
+    # Procura até 5 níveis acima
+    for _ in range(5):
+        env_file = current / ".env"
+        if env_file.exists():
+            return env_file
+        parent = current.parent
+        if parent == current:  # Chegou na raiz do sistema
+            break
+        current = parent
+
+    return None
 
 
 class SecretsManager:
@@ -21,7 +45,15 @@ class SecretsManager:
         Args:
             use_gcp: Se True, usa Secret Manager. Se None, detecta automaticamente.
         """
-        load_dotenv()
+        # Tenta encontrar e carregar o arquivo .env
+        env_file = _find_env_file()
+        if env_file:
+            load_dotenv(dotenv_path=env_file, override=False)
+            logger.debug(f"Arquivo .env carregado de: {env_file}")
+        else:
+            # Fallback: tenta carregar do diretório atual
+            load_dotenv(override=False)
+            logger.debug("Tentando carregar .env do diretório atual")
 
         if use_gcp is None:
             # Auto-detecta baseado no ambiente
@@ -180,7 +212,6 @@ def get_api_key(provider: str) -> str:
     """Recupera API key de um provider"""
     key_map = {
         "openrouter": "OPENROUTER_API_KEY",
-        "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
         "langsmith": "LANGSMITH_API_KEY",
         "brapi": "BRAPI_TOKEN",

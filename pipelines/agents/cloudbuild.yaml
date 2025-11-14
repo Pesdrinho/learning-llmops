@@ -1,0 +1,118 @@
+# Cloud Build Configuration - Agents Pipeline
+#
+# Este arquivo define como fazer build e deploy automático no GCP.
+#
+# Processo:
+# 1. Build da imagem Docker
+# 2. Push para Artifact Registry
+# 3. Deploy no Cloud Run
+#
+# Trigger:
+#   gcloud builds submit --config=cloudbuild.yaml .
+#
+# Uso:
+#   gcloud builds submit --config=pipelines/agents/cloudbuild.yaml .
+
+substitutions:
+  _IMAGE_NAME: agents
+  _REGION: us-central1
+  _REPOSITORY: docker-images
+  _SERVICE_ACCOUNT: learning-llmops@${PROJECT_ID}.iam.gserviceaccount.com
+
+steps:
+  # ========== STEP 1: BUILD ==========
+  # Cria imagem Docker otimizada para produção
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}:latest'
+      - '-f'
+      - 'pipelines/agents/Dockerfile.prod'
+      - '.'
+
+    waitFor: ['-']
+
+  # ========== STEP 2: PUSH ==========
+  # Envia imagem para Artifact Registry
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-image'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}'
+
+    waitFor: ['build-image']
+
+  # ========== STEP 3: DEPLOY ==========
+  # Faz deploy no Cloud Run
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-cloud-run'
+    entrypoint: gcloud
+    args:
+      # Comando base
+      - 'run'
+      - 'deploy'
+      - '${_IMAGE_NAME}'
+
+      # Imagem
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}'
+
+      # Localização
+      - '--region=${_REGION}'
+      - '--platform=managed'
+
+      # Recursos (agentes precisam de mais recursos)
+      - '--memory=1Gi'              # 1GB RAM
+      - '--cpu=1'                   # 1 vCPU
+      - '--timeout=120s'            # Timeout de 120s (análises podem demorar)
+      - '--concurrency=40'          # Máximo de requests simultâneos por instância
+
+      # Autoscaling
+      - '--min-instances=0'         # Escala para zero quando sem uso
+      - '--max-instances=1'         # Máximo 1 instância
+
+      # Segurança
+      - '--allow-unauthenticated'   # API pública
+      - '--service-account=${_SERVICE_ACCOUNT}'
+
+      # Variáveis de ambiente
+      - '--set-env-vars=APP_ENV=production,PORT=8080'
+
+      # Secrets (configurados no Secret Manager)
+      # Descomente após criar secrets:
+      # - '--set-secrets=OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest'
+      # - '--set-secrets=DB_HOST=DB_HOST:latest'
+      # - '--set-secrets=DB_PASSWORD=DB_PASSWORD:latest'
+
+      # Labels
+      - '--labels=app=agents,env=production,team=llmops,architecture=agents'
+
+    waitFor: ['push-image']
+
+# ========== IMAGES ==========
+# Lista de imagens armazenadas no Artifact Registry
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE_NAME}:latest'
+
+# ========== OPTIONS ==========
+# Configurações do build
+
+options:
+  # Máquina poderosa para build rápido
+  machineType: 'N1_HIGHCPU_8'
+
+  # Logging
+  logging: CLOUD_LOGGING_ONLY
+
+# ========== TIMEOUT ==========
+# Timeout global do build
+timeout: 1200s

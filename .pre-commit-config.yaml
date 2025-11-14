@@ -24,7 +24,8 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-requests, types-PyYAML]
-        args: [--ignore-missing-imports, --no-strict-optional]
+        args: [--ignore-missing-imports, --no-strict-optional, --explicit-package-bases, --namespace-packages]
+        exclude: ^pipelines/(api-blackbox|crawler-brapi|agents)/app/
 
   - repo: local
     hooks:

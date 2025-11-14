@@ -136,3 +136,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
+namespace_packages = true
+
+# Cada pipeline tem seu próprio namespace "app", então devem ser verificados separadamente
+[[tool.mypy.overrides]]
+module = "pipelines.*.app.*"
+follow_imports = "skip"

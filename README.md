@@ -1,366 +1,219 @@
 # 🤖 LLMOps Lab
 
-> Repositório educacional completo com exemplos práticos de arquiteturas LLMOps para produção
+> Laboratório educacional de arquiteturas LLMOps prontas para produção - Cloud e Local
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-## 📚 Visão Geral
+## 🎯 Objetivo
 
-O **LLMOps Lab** é um monorepo educacional que demonstra como construir, avaliar e deployar pipelines de LLM em produção. O projeto implementa **5 arquiteturas principais** usando dados financeiros da [Brapi API](https://brapi.dev):
+Este repositório é um **laboratório completo** para aprender a construir, avaliar e deployar arquiteturas LLMOps em produção. Cada pipeline é:
 
-### 🎯 Arquiteturas Implementadas
+- ✅ **Educacional**: Explica conceitos, decisões e trade-offs
+- ✅ **Prático**: Código funcional com guias passo-a-passo
+- ✅ **Agnóstico**: Funciona em cloud (GCP) e local (VPS/VMs/Docker)
+- ✅ **Production-ready**: Observabilidade, governança e testes incluídos
 
-#### **Quadrante 1: Geração de Documentos e RAG**
-1. **🕷️ Crawler Brapi** - Coleta diária de dados financeiros (Cloud Run + Cloud Scheduler)
-2. **🤖 Agentes NL2SQL** - Geração de relatórios financeiros via queries SQL (LangGraph)
-3. **📖 Pipeline RAG** - Recuperação e geração de respostas contextualizadas (pgvector + OpenAI)
+## 📚 Arquiteturas Implementadas
 
-#### **Quadrante 2: Fine-tuning e Tool Use**
-4. **🌐 API Blackbox** - Gateway OpenRouter com geração de dataset para tool use
-5. **🎓 Fine-tuning** - Treino de modelo especializado (Qwen + LoRA)
-6. **🔧 Agentes + MCP** - Agentes com MCP Server para tool calling otimizado
+### 1. 🕷️ Crawler Brapi
+Coleta automatizada de dados financeiros da B3 via [Brapi API](https://brapi.dev).
+- **Conceitos**: ETL, Upsert patterns, Job scheduling
+- **Stack**: Python, PostgreSQL, Docker
+- **Deploy**: Cloud Run Job + Cloud Scheduler | Cron local
+- **[Ver documentação →](pipelines/crawler-brapi/README.md)**
 
----
+### 2. 🤖 Agentes NL2SQL
+Geração de relatórios financeiros usando agentes LangGraph com NL2SQL.
+- **Conceitos**: Agentes autônomos, LangGraph, Tool calling, NL2SQL
+- **Stack**: LangGraph, OpenRouter, PostgreSQL
+- **Deploy**: Cloud Run Service | Docker Compose
+- **[Ver documentação →](pipelines/agents/README.md)**
 
-## 🏗️ Arquitetura do Sistema
+### 3. 📖 Pipeline RAG
+Retrieval Augmented Generation com busca vetorial e chunking inteligente.
+- **Conceitos**: RAG, Embeddings, Chunking, Busca vetorial
+- **Stack**: pgvector, OpenAI Embeddings, FastAPI
+- **Deploy**: Cloud Run Job + Service | Docker Compose
+- **[Ver documentação →](pipelines/rag/README.md)**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     QUADRANTE 1                             │
-│                                                             │
-│  Brapi API → Crawler → Cloud SQL (PostgreSQL + pgvector)   │
-│                ↓                                            │
-│         Agentes NL2SQL → Documentos → Cloud Storage        │
-│                              ↓                              │
-│                         Pipeline RAG                        │
-│                              ↓                              │
-│                    Respostas Contextualizadas               │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                     QUADRANTE 2                             │
-│                                                             │
-│  API Blackbox (OpenRouter) → Dataset Tool Use → Cloud SQL  │
-│                                    ↓                        │
-│                            Fine-tuning (Qwen + LoRA)        │
-│                                    ↓                        │
-│                          Modelo Tool Use                    │
-│                                    ↓                        │
-│              MCP Server ← Agentes+MCP → Rotas Brapi        │
-└─────────────────────────────────────────────────────────────┘
-```
+### 4. 🌐 API Blackbox
+Gateway LLM com governança, mascaramento PII e geração de datasets.
+- **Conceitos**: API Gateway, PII masking, Rate limiting, Dataset generation
+- **Stack**: FastAPI, OpenRouter, PostgreSQL
+- **Deploy**: Cloud Run Service | Docker Compose
+- **[Ver documentação →](pipelines/api-blackbox/README.md)**
 
 ---
 
-## 🚀 Quick Start (10 minutos)
+## 🚀 Quick Start
 
-### 1️⃣ Pré-requisitos
+### Pré-requisitos
 
-- Python 3.10+
-- Docker & Docker Compose
-- Conta GCP (opcional para produção)
-- API Keys: OpenRouter, OpenAI, LangSmith
+- **Docker e Docker Compose** (recomendado)
+- **Python 3.11+** (opcional, para desenvolvimento)
+- **PostgreSQL 15+** com extensão `pgvector` (via Docker ou instalado)
+- **API Keys**: OpenRouter, OpenAI (obtenha em [OpenRouter](https://openrouter.ai) e [OpenAI](https://platform.openai.com))
 
-### 2️⃣ Instalação
+### Setup Inicial (5 minutos)
 
 ```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/llmops-lab.git
-cd llmops-lab
+# 1. Clone o repositório
+git clone https://github.com/seu-usuario/learning-llmops.git
+cd learning-llmops
 
-# Crie e ative ambiente virtual
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# ou
-.venv\Scripts\activate  # Windows
-
-# Instale dependências
-make dev-install
-
-# Configure variáveis de ambiente
+# 2. Configure variáveis de ambiente
 cp env.example .env
-# Edite .env com suas credenciais
-```
+# Edite .env com suas credenciais (OPENROUTER_API_KEY, OPENAI_API_KEY, DB_PASSWORD)
 
-### 3️⃣ Setup do Banco de Dados Local
-
-```bash
-# Sobe PostgreSQL com pgvector
+# 3. Suba o banco de dados local
 make db-up
 
-# Aplica DDLs
+# 4. Aplique schemas SQL
 make db-init
-
-# Executa seed inicial (amostra de dados)
-make seed
 ```
 
-### 4️⃣ Primeira Vitória: API Blackbox
+### Primeira Vitória: API Blackbox (2 minutos)
 
 ```bash
-# Roda API Blackbox
-make api
+# Inicie a API
+cd pipelines/api-blackbox/app
+python main.py
 
 # Em outro terminal, teste:
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [{"role": "user", "content": "Olá!"}],
-    "model": "openrouter/gpt-3.5-turbo"
+    "messages": [{"role": "user", "content": "Explique LLMOps em 2 frases"}],
+    "model": "gpt-oss-120b"
   }'
 ```
 
-### 5️⃣ Segunda Vitória: RAG
+### Segunda Vitória: Crawler + Agentes (5 minutos)
 
 ```bash
-# Ingere documentos
-make rag-ingest
+# 1. Execute o crawler para popular dados
+cd pipelines/crawler-brapi/app
+python main.py --sample
 
-# Consulta RAG
-make rag-query q="Qual o último dividendo da Petrobras?"
+# 2. Gere uma análise com agentes
+cd ../../agents/app
+python main.py
+
+# Teste a API:
+curl -X POST http://localhost:9001/generate_analysis \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "PETR4",
+    "analysis_type": "price_movement",
+    "period_days": 90
+  }'
 ```
+
+---
+
+## 🐳 Deploy: Cloud ou Local?
+
+Este laboratório foi projetado para funcionar em **ambos os ambientes**:
+
+### ☁️ Deploy em Cloud (GCP)
+
+Cada pipeline tem suporte completo para Google Cloud Platform:
+- **Cloud Run**: Serviços serverless escaláveis
+- **Cloud Scheduler**: Agendamento de jobs
+- **Cloud SQL**: PostgreSQL gerenciado com pgvector
+- **Artifact Registry**: Versionamento de imagens Docker
+- **Secret Manager**: Gestão segura de credenciais
+
+**Instruções**: Veja o arquivo `DEPLOY.md` em cada pipeline.
+
+### 🏠 Deploy Local/On-Premises
+
+Todas as arquiteturas funcionam localmente ou em VPS/VMs:
+- **Docker Compose**: Orquestração de serviços local
+- **PostgreSQL + pgvector**: Banco via Docker ou instalado
+- **Cron**: Agendamento de jobs (alternativa ao Cloud Scheduler)
+- **Nginx**: Reverse proxy (alternativa ao Cloud Run)
+- **Docker Registry**: Registry local (alternativa ao Artifact Registry)
+
+**Instruções**: Veja seção "Deploy Local" no README de cada pipeline.
 
 ---
 
 ## 📂 Estrutura do Projeto
 
 ```
-llmops-lab/
-├── llmops_lab/              # Módulos exportáveis (reutilizáveis)
-│   ├── config/              # Configurações de modelos e preços
-│   ├── prompts/             # Prompt Registry (YAML + Jinja)
-│   ├── secrets/             # Secret Manager wrapper
-│   ├── guards/              # NeMo Guardrails + PII masking
-│   ├── logging/             # Logger, custo, tracing (LangSmith)
-│   ├── db/                  # Conectores SQL + schemas
-│   ├── evals/               # Harness Ragas + métricas
-│   ├── utils/               # Cache, rate limit, helpers
-│   └── nl2sql/              # Módulo NL2SQL compartilhado
-│
-├── pipelines/               # Arquiteturas principais
+learning-llmops/
+├── pipelines/               # 🚀 Arquiteturas principais
 │   ├── crawler-brapi/       # Crawler de dados Brapi
 │   ├── agents/              # Agentes NL2SQL (LangGraph)
 │   ├── rag/                 # Pipeline RAG completo
-│   ├── api-blackbox/        # Gateway OpenRouter
-│   ├── fine-tuning/         # Fine-tuning Qwen + LoRA
-│   └── agents-mcp/          # Agentes + MCP Server
+│   └── api-blackbox/        # Gateway OpenRouter
 │
-├── data-schemas/            # Schemas SQL e seeds
-│   ├── sql/                 # DDLs
+├── llmops_lab/              # 📦 Módulos reutilizáveis
+│   ├── config/              # Configurações de modelos
+│   ├── secrets/             # Secret Manager wrapper
+│   ├── logging/             # Logger e tracking de custos
+│   ├── db/                  # Conectores SQL
+│   └── utils/               # Helpers
+│
+├── data-schemas/            # 🗄️ Schemas e seeds
+│   ├── sql/                 # DDLs do PostgreSQL
 │   └── seeds/               # Scripts de ingestão
 │
-├── docs/                    # Documentação
+├── docs/                    # 📚 Documentação
 │   ├── adr/                 # Architecture Decision Records
-│   ├── diagrams/            # Diagramas de arquitetura
 │   └── guides/              # Guias detalhados
 │
-├── scripts/                 # Scripts utilitários
-├── tests/                   # Testes (unit, integration, e2e)
-├── apps/                    # Aplicações integradas
-├── .github/workflows/       # CI/CD
-├── pyproject.toml           # Dependências
-└── Makefile                 # Comandos úteis
+└── scripts/                 # 🔧 Utilitários
 ```
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## 🛠️ Stack Tecnológica
 
-### **LLM & AI**
-- **LangChain** & **LangGraph** - Orquestração de agentes
-- **OpenAI** - Embeddings (text-embedding-3-small)
-- **OpenRouter** - Gateway multi-modelo
-- **Qwen** - Modelo base para fine-tuning
-- **PEFT/LoRA** - Fine-tuning eficiente
-
-### **Database & Storage**
-- **PostgreSQL 15** com **pgvector** - Banco vetorial
-- **Cloud SQL** - Postgres gerenciado (GCP)
-- **Cloud Storage** - Armazenamento de documentos
-
-### **Observabilidade**
-- **LangSmith** - Tracing e debugging
-- **Ragas** - Avaliação de RAG
-- **NeMo Guardrails** - Guardrails básicos
-
-### **Infrastructure**
-- **Cloud Run** - Serverless containers
-- **Cloud Scheduler** - Agendamento de jobs
-- **Secret Manager** - Gestão de segredos
+- **LLM**: LangChain, LangGraph, OpenAI, OpenRouter
+- **Database**: PostgreSQL 15 + pgvector
+- **Backend**: FastAPI, Python 3.11+
+- **Infra**: Docker, Docker Compose, Cloud Run
+- **Observabilidade**: LangSmith, logs estruturados
+- **Dados**: Brapi API (mercado financeiro brasileiro)
 
 ---
 
-## 📊 Dados e Domínio
+## 📖 Documentação
 
-Todos os pipelines utilizam dados do **mercado financeiro brasileiro** via [Brapi API](https://brapi.dev):
+### Por Arquitetura
+- 🕷️ [Crawler Brapi](pipelines/crawler-brapi/README.md) - Coleta de dados financeiros
+- 🤖 [Agentes NL2SQL](pipelines/agents/README.md) - Geração de relatórios com LangGraph
+- 📖 [Pipeline RAG](pipelines/rag/README.md) - Busca vetorial e geração contextualizada
+- 🌐 [API Blackbox](pipelines/api-blackbox/README.md) - Gateway LLM com governança
 
-- ✅ **Cotações** de ações (PETR4, VALE3, etc)
-- ✅ **Dados históricos** OHLC
-- ✅ **Dividendos**
-- ✅ **Taxas de câmbio**
-- ✅ **Criptomoedas**
-- ✅ **SELIC** e **IPCA**
-
----
-
-## 🎯 Casos de Uso por Arquitetura
-
-### 1. **Crawler Brapi**
-- Coleta diária automatizada de dados financeiros
-- Upsert inteligente (evita duplicatas)
-- Deploy serverless (Cloud Run + Cloud Scheduler)
-
-### 2. **Agentes NL2SQL**
-- "Gere relatório de performance da PETR4 em 2024"
-- Consulta SQL segura (lista branca de tabelas)
-- Geração de documentos markdown
-
-### 3. **Pipeline RAG**
-- "Qual foi a variação do Ibovespa no último trimestre?"
-- Recuperação de documentos (k=3, cosine similarity)
-- Avaliação com Ragas (answer_relevancy, faithfulness)
-
-### 4. **API Blackbox**
-- Gateway unificado para múltiplos modelos
-- Rate limiting (US$ 15/dia)
-- PII masking (CPF, CNPJ, email)
-- Geração de dataset para tool use
-
-### 5. **Fine-tuning**
-- Especialização em tool calling (rotas Brapi)
-- Métrica: 80%+ de acurácia de seleção de ferramenta
-- Treino LoRA com Qwen 7B
-
-### 6. **Agentes + MCP**
-- MCP Server com rotas Brapi encapsuladas
-- Agentes consumindo modelo fine-tunado
-- Tool calling otimizado
-
----
-
-## 🔒 Governança e Segurança
-
-### **Custo**
-- ✅ Rate limit diário: **US$ 15**
-- ✅ Tracking de custo por request
-- ✅ Priorização de modelos locais/baratos
-
-### **Segurança**
-- ✅ PII masking (logs)
-- ✅ NeMo Guardrails (jailbreak, toxicity)
-- ✅ SQL validation (deny-list: DROP, ALTER, DELETE)
-- ✅ Secret Manager (GCP)
-
-### **Qualidade**
-- ✅ CI Gates: Ragas (RAG) + Tool Accuracy (≥80%)
-- ✅ Pre-commit hooks (ruff, mypy)
-- ✅ Testes E2E
-
----
-
-## 📈 Métricas e SLOs
-
-| Pipeline | Métrica Principal | Threshold |
-|----------|------------------|-----------|
-| RAG | Answer Relevancy (Ragas) | ≥ 0.7 |
-| RAG | Faithfulness (Ragas) | ≥ 0.8 |
-| Fine-tuning | Tool Selection Accuracy | ≥ 80% |
-| API Blackbox | Custo/dia | ≤ US$ 15 |
-| Agentes+MCP | Tool Call Success Rate | ≥ 95% |
-
----
-
-## 🧪 Testes
-
-```bash
-# Todos os testes
-make test
-
-# Apenas unitários
-make test-unit
-
-# Integração
-make test-integration
-
-# End-to-end
-make test-e2e
-
-# Avaliações
-make eval-rag
-make eval-tool-use
-```
-
----
-
-## 🚢 Deploy para Produção
-
-### Pré-requisitos GCP (ver `docs/guides/gcp-setup.md`)
-1. Criar projeto GCP
-2. Habilitar APIs (Cloud SQL, Cloud Run, etc)
-3. Configurar Cloud SQL PostgreSQL 15 + pgvector
-4. Criar buckets Cloud Storage
-5. Configurar Secret Manager
-
-### Deploy dos Serviços
-
-```bash
-# Deploy individual
-make deploy-crawler   # Crawler Brapi
-make deploy-api       # API Blackbox
-make deploy-rag       # Pipeline RAG
-make deploy-mcp       # MCP Server
-
-# Deploy de tudo
-make deploy-all
-```
-
----
-
-## 📖 Documentação Detalhada
-
-- 📘 [Quickstart Guide](docs/guides/quickstart.md)
-- 🏗️ [ADR: Decisões de Arquitetura](docs/adr/)
-- 🔧 [Setup GCP](docs/guides/gcp-setup.md)
-- 🤖 [Guia RAG](pipelines/rag/README.md)
-- 🕷️ [Guia Crawler](pipelines/crawler-brapi/README.md)
-- 🎓 [Guia Fine-tuning](pipelines/fine-tuning/README.md)
-- 🔧 [Guia MCP](pipelines/agents-mcp/README.md)
+### Guias Gerais
+- 📚 [Architecture Decision Records](docs/adr/) - Decisões arquiteturais documentadas
+- 🔧 [Guias Técnicos](docs/guides/) - Setup, deploy e troubleshooting
 
 ---
 
 ## 🤝 Contribuindo
 
-Contribuições são bem-vindas! Veja [CONTRIBUTING.md](CONTRIBUTING.md) para guidelines.
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/MinhaFeature`)
-3. Commit suas mudanças (`git commit -m 'feat: adiciona MinhaFeature'`)
-4. Push para a branch (`git push origin feature/MinhaFeature`)
-5. Abra um Pull Request
+Este é um projeto educacional aberto. Contribuições são bem-vindas! Veja [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
 ## 📝 Licença
 
-Este projeto está sob a licença MIT. Veja [LICENSE](LICENSE) para mais detalhes.
+MIT License - veja [LICENSE](LICENSE) para detalhes.
 
 ---
 
-## 🙏 Agradecimentos
+## 🙏 Créditos
 
-- [Brapi.dev](https://brapi.dev) - API de dados financeiros
-- [LangChain](https://langchain.com) - Framework de LLM
-- [OpenRouter](https://openrouter.ai) - Gateway de modelos
-- Comunidade LLMOps Brasil
-
----
-
-## 📞 Contato
-
-Para dúvidas ou sugestões, abra uma [issue](https://github.com/seu-usuario/llmops-lab/issues) ou entre em contato.
+- [Brapi.dev](https://brapi.dev) - API de dados financeiros brasileiros
+- [LangChain](https://langchain.com) - Framework para aplicações LLM
+- [OpenRouter](https://openrouter.ai) - Gateway multi-modelo
 
 ---
 
-**Feito com ❤️ para a comunidade LLMOps**
+**Desenvolvido para a comunidade LLMOps brasileira**

@@ -1,8 +1,10 @@
 .PHONY: help setup install dev-install db-up db-down db-init db-reset seed \
-        api rag-ingest rag-query eval-rag agents crawler \
+        api rag-vectorize rag-api rag-ingest rag-query eval-rag agents crawler \
         test test-unit test-integration test-e2e \
         lint format pre-commit-install pre-commit-run \
-        clean docker-build docker-up docker-down
+        clean docker-build docker-up docker-down \
+        deploy-crawler deploy-api deploy-rag-job deploy-rag-api deploy-mcp deploy-all \
+        git-status git-add git-commit git-push git-pull git-branch git-checkout git-merge
 
 help: ## Mostra esta mensagem de ajuda
 	@echo "LLMOps Lab - Comandos Disponíveis:"
@@ -50,10 +52,16 @@ api: ## Roda API Blackbox (gateway OpenRouter)
 crawler: ## Executa crawler Brapi manualmente
 	python pipelines/crawler-brapi/app/main.py
 
-rag-ingest: ## Executa ingestão de documentos no RAG
+rag-vectorize: ## Executa job de vetorização RAG localmente
+	python -m pipelines.rag.vectorization_job.main
+
+rag-api: ## Roda API de geração RAG localmente
+	uvicorn pipelines.rag.generation_api.main:app --reload --host 0.0.0.0 --port 8001
+
+rag-ingest: ## [DEPRECATED] Executa ingestão de documentos no RAG (use rag-vectorize)
 	python pipelines/rag/ingest/main.py
 
-rag-query: ## Consulta RAG (use: make rag-query q="sua pergunta")
+rag-query: ## [DEPRECATED] Consulta RAG (use rag-api) (use: make rag-query q="sua pergunta")
 	python pipelines/rag/retrieval/query.py --q "$(q)"
 
 agents: ## Executa agente NL2SQL (use: make agents q="sua pergunta")
@@ -99,6 +107,36 @@ pre-commit-install: ## Instala hooks do pre-commit
 pre-commit-run: ## Executa pre-commit em todos os arquivos
 	pre-commit run --all-files
 
+# ========== Git ==========
+
+git-status: ## Mostra status do repositório Git
+	git status
+
+git-add: ## Adiciona arquivos ao staging (use: make git-add files="arquivo1 arquivo2" ou make git-add files=".")
+	git add $(files)
+
+git-commit: ## Faz commit (use: make git-commit msg="sua mensagem")
+	git commit -m "$(msg)"
+
+git-push: ## Faz push para o repositório remoto
+	git push
+
+git-pull: ## Faz pull do repositório remoto
+	git pull
+
+git-branch: ## Lista branches ou cria nova branch (use: make git-branch name="nome-da-branch")
+	@if [ -z "$(name)" ]; then \
+		git branch; \
+	else \
+		git checkout -b $(name); \
+	fi
+
+git-checkout: ## Muda para branch (use: make git-checkout branch="nome-da-branch")
+	git checkout $(branch)
+
+git-merge: ## Faz merge de branch (use: make git-merge branch="nome-da-branch")
+	git merge $(branch)
+
 # ========== Docker ==========
 
 docker-build: ## Build de todas as imagens Docker
@@ -133,10 +171,13 @@ deploy-crawler: ## Deploy crawler para Cloud Run
 deploy-api: ## Deploy API Blackbox para Cloud Run
 	bash pipelines/api-blackbox/deploy.sh
 
-deploy-rag: ## Deploy RAG para Cloud Run
-	bash pipelines/rag/deploy.sh
+deploy-rag-job: ## Deploy job de vetorização RAG para Cloud Run
+	bash pipelines/rag/vectorization_job/deploy.sh
+
+deploy-rag-api: ## Deploy API de geração RAG para Cloud Run
+	bash pipelines/rag/generation_api/deploy.sh
 
 deploy-mcp: ## Deploy MCP Server para Cloud Run
 	bash pipelines/agents-mcp/mcp_server/deploy.sh
 
-deploy-all: deploy-crawler deploy-api deploy-rag deploy-mcp ## Deploy de todos os serviços
+deploy-all: deploy-crawler deploy-api deploy-rag-job deploy-rag-api deploy-mcp ## Deploy de todos os serviços

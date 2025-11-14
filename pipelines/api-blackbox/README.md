@@ -1,234 +1,314 @@
-# 🚀 API Blackbox - Gateway OpenRouter com Governança
+# API Blackbox - Gateway OpenRouter com Governança
 
 Gateway inteligente para modelos LLM via OpenRouter, com controle de custos, mascaramento de PII e observabilidade completa.
 
 ---
 
-## 📚 O Que É e Por Que Existe?
+## 🎯 Conceitos e Por Quê
 
-### O Problema
+### O que é um API Gateway?
 
-Quando trabalhamos com LLMs diretamente, enfrentamos vários desafios:
+Um **API Gateway** é uma camada intermediária entre sua aplicação e serviços externos (neste caso, modelos LLM). Ele centraliza:
+- **Autenticação e autorização**
+- **Rate limiting e controle de custos**
+- **Logs e observabilidade**
+- **Transformação de dados**
+- **Governança e compliance**
 
-1. **Custos Descontrolados** 💸
-   - LLMs cobram por token (~US$0.50 a US$30 por 1 milhão de tokens)
-   - Loops infinitos ou bugs podem custar milhares
-   - Difícil prever gastos mensais
+### Por que "Blackbox"?
 
-2. **Dados Sensíveis** 🔒
-   - CPFs, CNPJs, emails podem vazar em logs
-   - LGPD/GDPR exigem proteção de PII
-   - Modelos não precisam ver dados sensíveis
+O termo "blackbox" refere-se à **opacidade intencional** dos dados sensíveis:
+- Dados PII são **mascarados** antes de enviar ao LLM
+- O LLM nunca vê informações sensíveis reais
+- Logs armazenam versões mascaradas (compliance com LGPD/GDPR)
 
-3. **Falta de Observabilidade** 📊
-   - Difícil rastrear quem está usando
-   - Logs dispersos e não estruturados
-   - Sem métricas de custo por usuário
+### Por que OpenRouter?
 
-4. **Múltiplos Providers** 🔀
-   - OpenAI, Anthropic, Meta, Google...
-   - APIs diferentes para cada um
-   - Gerenciamento de chaves complexo
+**OpenRouter** é um gateway que agrega múltiplos provedores LLM:
+- **Uma API, dezenas de modelos**: GPT-4, Claude, Llama, Gemini, etc
+- **Billing centralizado**: Uma fatura, múltiplos providers
+- **Sem vendor lock-in**: Mude de modelo sem reescrever código
+- **Fallback automático**: Se um modelo falha, tenta outro
 
-### A Solução: API Blackbox
+### Problemas Resolvidos
 
-Esta API resolve todos esses problemas atuando como um **gateway intermediário** entre sua aplicação e os modelos LLM:
+**1. Custos Descontrolados 💸**
+- LLMs cobram por token (~$0.50 a $30 por 1M tokens)
+- Loops infinitos ou bugs podem custar milhares
+- **Solução**: Rate limit diário (ex: US$ 15/dia)
 
-```
-Sua App → API Blackbox → OpenRouter → Modelo LLM
-              ↓
-         [Governança]
-         - PII Masking
-         - Cost Limiting
-         - Logging
-         - Metrics
-```
+**2. Dados Sensíveis 🔒**
+- CPFs, CNPJs, emails podem vazar em logs
+- LGPD/GDPR exigem proteção de PII
+- **Solução**: Mascaramento automático via regex
+
+**3. Falta de Observabilidade 📊**
+- Difícil rastrear quem está usando quanto
+- Logs dispersos e não estruturados
+- **Solução**: Logs centralizados no PostgreSQL com tracking de custos
+
+**4. Múltiplos Providers 🔀**
+- APIs diferentes para OpenAI, Anthropic, Meta, Google
+- Gerenciamento de múltiplas chaves complexo
+- **Solução**: OpenRouter unifica todos em uma API
 
 ---
 
-## 🎯 Funcionalidades
+## 🏗️ Arquitetura do Sistema
 
-### 1. Gateway OpenRouter
+### Fluxo de Requisição
 
-**O que faz:**
-- Acessa múltiplos modelos via uma única API
-- Fallback automático se um modelo falha
-- Routing inteligente para melhor custo-benefício
-
-**Modelos disponíveis:**
-- `gpt-oss-120b` - Econômico (~US$0.15/1M tokens)
-- `anthropic/claude-3.5-sonnet` - Premium (~US$3-15/1M tokens)
-- `openai/gpt-4-turbo` - Alta performance (~US$10-30/1M tokens)
-- `openai/gpt-3.5-turbo` - Custo-benefício (~US$0.50/1M tokens)
-- `meta-llama/llama-3-70b` - Open-source (~US$0.70/1M tokens)
-
-**Por que OpenRouter?**
-- Uma API, dezenas de modelos
-- Billing centralizado
-- Sem vendor lock-in
-
-### 2. Mascaramento Automático de PII
-
-**O que mascara:**
-- CPF: `123.456.789-00` → `***.***.***-**`
-- CNPJ: `12.345.678/0001-00` → `**.***.***/****-**`
-- Email: `user@example.com` → `***@***.***`
-- Telefone: `(11) 98765-4321` → `(11) *****-****`
-
-**Como funciona:**
-1. Request chega com dados
-2. Regex detecta PII
-3. Substitui por máscaras
-4. Envia versão mascarada ao LLM
-5. LLM nunca vê dados sensíveis
-
-**Exemplo:**
-```python
-# Entrada
-"Meu CPF é 123.456.789-00 e email: joao@gmail.com"
-
-# Mascarado antes de enviar ao LLM
-"Meu CPF é ***.***.**
-
--** e email: ***@***.***"
+```
+Cliente → FastAPI → Middleware (PII Mask + Cost Limit) → OpenRouter → LLM
+                         ↓
+                  PostgreSQL (logs + costs)
 ```
 
-### 3. Controle de Custos
+### Componentes Principais
 
-**Limite diário:**
-- Padrão: US$15/dia
-- Configurável via `BUDGET_USD_DAY`
+#### 1. API (FastAPI)
 
-**Como funciona:**
-1. Request chega
-2. Calcula custo estimado
-3. Soma com gasto do dia
-4. Se >= limite → retorna 429 (Too Many Requests)
-5. Se < limite → processa normalmente
-6. Após processamento → registra custo real
+**Endpoints**:
+- `POST /chat` - Chat completion
+- `GET /models` - Lista modelos disponíveis
+- `GET /health` - Health check
 
-**Cálculo de custo:**
-```python
-custo_input = (prompt_tokens / 1000) × preço_input_por_1k
-custo_output = (completion_tokens / 1000) × preço_output_por_1k
-custo_total = custo_input + custo_output
-```
+#### 2. Middleware
 
-**Exemplo:**
-```
-Modelo: gpt-oss-120b
-Input: 1000 tokens × $0.10/1k = $0.10
-Output: 500 tokens × $0.20/1k = $0.10
-Total: $0.20
-```
+**PII Masker**:
+- Detecta CPF, CNPJ, email, telefone via regex
+- Substitui por máscaras antes de enviar ao LLM
+- LLM nunca vê dados sensíveis
 
-### 4. Observabilidade Completa
+**Cost Limiter**:
+- Calcula custo estimado por request
+- Soma com gasto do dia atual
+- Bloqueia se >= limite (retorna 429)
 
-**Logs estruturados:**
-Cada requisição salva em `observability.llm_logs`:
+#### 3. Guardrails (opcional)
+
+- **Injection Detector**: Detecta prompt injection
+- **Topic Validator**: Valida se tópico é permitido
+- **Output Validator**: Valida formato da resposta
+
+#### 4. Observabilidade
+
+**Tabela `observability.llm_logs`**:
 - Prompt mascarado
 - Resposta mascarada
 - Tokens usados
 - Custo em USD
 - Latência em ms
-- Status (success/error)
 - Timestamp
 
-**Tracking de custos:**
-Cada requisição salva em `observability.spend_ledger`:
+**Tabela `observability.spend_ledger`**:
 - Hash da API key (segurança)
 - Modelo usado
 - Custo em USD
 - Timestamp
 
-**Métricas disponíveis:**
-- Custo por usuário
-- Custo por modelo
-- Latência média
-- Taxa de erro
-- Tokens por dia
+### Stack Tecnológica
+
+- **FastAPI**: Framework web moderno e assíncrono
+- **OpenRouter**: Gateway multi-modelo
+- **PostgreSQL**: Logs e tracking de custos
+- **Pydantic**: Validação de dados
+- **Docker**: Containerização
 
 ---
 
-## 🚦 Quick Start
+## 🚀 Deploy Local
 
 ### Pré-requisitos
 
-- Python 3.10+
-- PostgreSQL com DDLs aplicados
-- OpenRouter API Key
+- Docker e Docker Compose
+- PostgreSQL (via Docker ou instalado)
+- Python 3.11+ (opcional, para desenvolvimento)
+- OpenRouter API Key ([obtenha aqui](https://openrouter.ai))
 
-### Instalação Local
-
-1. **Configure variáveis de ambiente:**
+### Opção 1: Docker Compose (Recomendado para Produção Local)
 
 ```bash
-# Copie o template
-cp env.example .env
+# 1. Configure variáveis de ambiente
+cd pipelines/api-blackbox
+cp .env.example .env
+# Edite .env com OPENROUTER_API_KEY e DATABASE_URL
 
-# Edite o .env
-OPENROUTER_API_KEY=sk-or-v1-xxx
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/llmops
-BUDGET_USD_DAY=15.0
+# 2. Suba o serviço
+docker-compose up -d
+
+# 3. Verifique logs
+docker-compose logs -f api-blackbox
+
+# 4. Teste
+curl http://localhost:8000/health
 ```
 
-2. **Instale dependências:**
+**docker-compose.yml** (criar na raiz de `pipelines/api-blackbox/`):
+```yaml
+version: '3.8'
 
-```bash
-pip install -e .
+services:
+  api-blackbox:
+    build:
+      context: ../..
+      dockerfile: pipelines/api-blackbox/Dockerfile.prod
+    ports:
+      - "8000:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - BUDGET_USD_DAY=${BUDGET_USD_DAY:-15.0}
+      - APP_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Opcional: PostgreSQL local
+  postgres:
+    image: pgvector/pgvector:pg15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=llmops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
 ```
 
-3. **Aplique DDLs (se ainda não aplicou):**
+### Opção 2: Python Local (Desenvolvimento)
 
 ```bash
-make db-init
-```
+# 1. Configure ambiente
+cd pipelines/api-blackbox
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# ou .venv\Scripts\activate  # Windows
 
-4. **Rode a API:**
+# 2. Instale dependências
+pip install -r requirements.txt
 
-```bash
-# Desenvolvimento (hot reload)
-cd pipelines/api-blackbox/app
+# 3. Configure variáveis de ambiente
+export OPENROUTER_API_KEY=sk-or-v1-...
+export DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/llmops
+export BUDGET_USD_DAY=15.0
+
+# 4. Execute a API
+cd app
 python main.py
-
-# Ou com uvicorn
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-5. **Acesse a documentação:**
+### Opção 3: Deploy em VPS/VM
 
+Para deploy em servidor próprio:
+
+```bash
+# 1. Instale Docker no servidor
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# 2. Clone o repositório
+git clone https://github.com/seu-repo/learning-llmops.git
+cd learning-llmops/pipelines/api-blackbox
+
+# 3. Configure .env
+nano .env
+
+# 4. Suba com Docker Compose
+docker-compose up -d
+
+# 5. Configure Nginx como reverse proxy
+sudo apt install nginx
+sudo nano /etc/nginx/sites-available/api-blackbox
 ```
-http://localhost:8000/docs  # Swagger UI
-http://localhost:8000/redoc  # ReDoc
+
+**Nginx config**:
+```nginx
+server {
+    listen 80;
+    server_name api.seudominio.com;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Rate limiting (adicional ao rate limit da API)
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req zone=api burst=20 nodelay;
+}
+```
+
+```bash
+# Ativar site
+sudo ln -s /etc/nginx/sites-available/api-blackbox /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## ☁️ Deploy Cloud (GCP)
+
+Para deploy em produção no Google Cloud Platform, veja [DEPLOY.md](./DEPLOY.md) para:
+- Build automático com Cloud Build
+- Deploy no Cloud Run
+- Versionamento no Artifact Registry
+- CI/CD com triggers
+- Rollback e recuperação
+
+**Quick deploy**:
+```bash
+cd pipelines/api-blackbox
+bash deploy.sh
 ```
 
 ---
 
 ## 📡 Uso da API
 
-### Endpoint: POST /chat
+### Chat Completion
 
-**Request:**
+```bash
+POST /chat
+Content-Type: application/json
+
+{
+  "messages": [
+    {"role": "user", "content": "Qual a cotação da PETR4?"}
+  ],
+  "model": "gpt-oss-120b",
+  "temperature": 0.7,
+  "max_tokens": 500
+}
+```
+
+**Exemplo**:
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sua-chave-aqui" \
   -d '{
     "messages": [
-      {"role": "user", "content": "Qual a cotação da PETR4?"}
+      {"role": "user", "content": "Explique LLMOps em 2 frases"}
     ],
-    "model": "gpt-oss-120b",
-    "temperature": 0.7,
-    "max_tokens": 500
+    "model": "gpt-oss-120b"
   }'
 ```
 
-**Response:**
+**Resposta**:
 ```json
 {
   "message": {
     "role": "assistant",
-    "content": "A cotação atual da PETR4 é..."
+    "content": "LLMOps é a prática de operacionalizar modelos LLM..."
   },
   "model": "gpt-oss-120b",
   "usage": {
@@ -238,27 +318,22 @@ curl -X POST http://localhost:8000/chat \
   },
   "cost_usd": 0.0075,
   "latency_ms": 1234,
-  "created_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-11-14T15:30:00Z",
   "request_id": "uuid-here"
 }
 ```
 
-**Códigos de status:**
-- `200` - Sucesso
-- `400` - Request inválido
-- `429` - Limite diário excedido
-- `500` - Erro interno
+### Modelos Disponíveis
 
-### Endpoint: GET /models
+```bash
+GET /models
+```
 
-Lista modelos disponíveis.
-
-**Request:**
 ```bash
 curl http://localhost:8000/models
 ```
 
-**Response:**
+**Resposta**:
 ```json
 {
   "models": [
@@ -270,107 +345,106 @@ curl http://localhost:8000/models
       "output_cost_per_1k": 0.20,
       "context_window": 4096,
       "description": "Modelo open-source econômico"
+    },
+    {
+      "id": "anthropic/claude-3.5-sonnet",
+      "name": "Claude 3.5 Sonnet",
+      "provider": "Anthropic",
+      "input_cost_per_1k": 3.00,
+      "output_cost_per_1k": 15.00,
+      "context_window": 200000,
+      "description": "Modelo premium de alta qualidade"
     }
-  ],
-  "total": 5
+  ]
 }
 ```
 
-### Endpoint: GET /health
+### Health Check
 
-Verifica saúde da API.
+```bash
+GET /health
+```
 
-**Request:**
 ```bash
 curl http://localhost:8000/health
 ```
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "version": "0.1.0",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "checks": {
-    "database": "ok",
-    "openrouter": "ok"
-  }
-}
-```
-
 ---
 
-## 🐳 Docker
+## 🔒 Funcionalidades de Governança
 
-### Desenvolvimento
+### 1. Mascaramento de PII
 
-```bash
-# Build
-docker build -f Dockerfile.dev -t api-blackbox:dev .
+**O que é mascarado**:
+- CPF: `123.456.789-00` → `***.***.**-**`
+- CNPJ: `12.345.678/0001-00` → `**.***.***/****-**`
+- Email: `user@example.com` → `***@***.***`
+- Telefone: `(11) 98765-4321` → `(11) *****-****`
 
-# Run
-docker run -p 8000:8000 \
-  --env-file .env \
-  api-blackbox:dev
+**Exemplo**:
+```python
+# Input do usuário
+"Meu CPF é 123.456.789-00 e email joao@gmail.com"
+
+# Enviado ao LLM (mascarado)
+"Meu CPF é ***.***.**-** e email ***@***.***"
+
+# Log no banco (mascarado)
+prompt_masked: "Meu CPF é ***.***.**-** e email ***@***.***"
 ```
 
-### Produção (Cloud Run)
+### 2. Controle de Custos
 
-```bash
-# Build e deploy
-bash deploy.sh
+**Limite diário configurável**:
+```env
+BUDGET_USD_DAY=15.0
 ```
 
-Ou manualmente:
+**Fluxo**:
+1. Request chega
+2. Calcula custo estimado
+3. Soma com gasto do dia (tabela `spend_ledger`)
+4. Se >= limite → retorna `429 Too Many Requests`
+5. Se < limite → processa normalmente
+6. Após processamento → registra custo real
 
-```bash
-# Build
-gcloud builds submit \
-  --config=cloudbuild.yaml \
-  .
-
-# Deploy já está no cloudbuild.yaml
+**Cálculo de custo**:
+```python
+custo_input = (prompt_tokens / 1000) × preço_input_por_1k
+custo_output = (completion_tokens / 1000) × preço_output_por_1k
+custo_total = custo_input + custo_output
 ```
 
----
+### 3. Observabilidade
 
-## 📊 Monitoramento
+**Logs estruturados**:
+Cada requisição salva em `observability.llm_logs`:
+- Prompt mascarado
+- Resposta mascarada
+- Tokens usados
+- Custo em USD
+- Latência em ms
+- Status (success/error)
 
-### Visualizando Logs
+**Tracking de custos**:
+Cada requisição salva em `observability.spend_ledger`:
+- Hash da API key (SHA256)
+- Modelo usado
+- Custo em USD
+- Timestamp
 
-**Local:**
-```bash
-# Logs da API
-tail -f /var/log/api-blackbox.log
-
-# Ou direto do Docker
-docker logs -f container-id
-```
-
-**Cloud Run:**
-```bash
-gcloud logging read \
-  "resource.type=cloud_run_revision" \
-  "resource.labels.service_name=api-blackbox" \
-  --limit 50 \
-  --format json
-```
-
-### Consultas SQL Úteis
-
-**Custo por dia:**
+**Consultas úteis**:
 ```sql
-SELECT 
+-- Custo por dia
+SELECT
   DATE(ts) as dia,
   SUM(cost_usd) as custo_total
 FROM observability.spend_ledger
 GROUP BY DATE(ts)
 ORDER BY dia DESC;
-```
 
-**Custo por modelo:**
-```sql
-SELECT 
+-- Custo por modelo
+SELECT
   model,
   COUNT(*) as requests,
   SUM(cost_usd) as custo_total,
@@ -381,118 +455,77 @@ GROUP BY model
 ORDER BY custo_total DESC;
 ```
 
-**Latência média:**
-```sql
-SELECT 
-  model,
-  AVG(latency_ms) as latencia_media,
-  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95
-FROM observability.llm_logs
-WHERE ts >= CURRENT_DATE - INTERVAL '1 day'
-  AND status = 'success'
-GROUP BY model;
-```
-
-**PII detectado:**
-```sql
-SELECT 
-  DATE(ts) as dia,
-  COUNT(*) as total_requests,
-  COUNT(CASE WHEN prompt_masked LIKE '%***%' THEN 1 END) as com_pii
-FROM observability.llm_logs
-WHERE ts >= CURRENT_DATE - INTERVAL '7 days'
-GROUP BY DATE(ts);
-```
-
 ---
 
-## 🔒 Segurança
+## 📁 Arquivos de Deploy
 
-### API Keys
+### Dockerfile.dev
 
-Sempre use HTTPS em produção.
-
-**Headers recomendados:**
-```
-Authorization: Bearer sk-or-v1-xxx
-```
-
-**Hash de API key no banco:**
-- Armazenamos SHA256 da key, não a key em texto claro
-- Impossível recuperar key original do hash
-- Permite rastrear uso sem expor chaves
-
-### Rate Limiting
-
-Além do limite de custo, considere:
-
-**Nginx rate limiting (prod):**
-```nginx
-limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-
-location /chat {
-    limit_req zone=api burst=20 nodelay;
-    proxy_pass http://api-blackbox:8000;
-}
-```
-
-**CloudFlare (alternativa):**
-- 10 requests/segundo por IP
-- DDoS protection automático
-
-### CORS
-
-Em produção, configure domínios específicos:
-
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://meu-app.com",
-        "https://admin.meu-app.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["POST"],  # Apenas POST
-    allow_headers=["Authorization", "Content-Type"],
-)
-```
-
----
-
-## 🧪 Testes
+Imagem Docker para **desenvolvimento local**:
+- Hot reload automático
+- Logs verbosos (DEBUG)
+- Sem otimizações de produção
 
 ```bash
-# Testes unitários
-pytest pipelines/api-blackbox/tests/test_pii_masker.py
-pytest pipelines/api-blackbox/tests/test_cost_limiter.py
+docker build -f Dockerfile.dev -t api-blackbox:dev .
+docker run -p 8000:8000 --env-file .env api-blackbox:dev
+```
 
-# Testes de integração
-pytest pipelines/api-blackbox/tests/test_integration.py
+### Dockerfile.prod
 
-# Coverage
-pytest --cov=app --cov-report=html
+Imagem Docker **otimizada para produção**:
+- Multi-stage build (menor tamanho)
+- Usuário não-root (segurança)
+- Health checks integrados
+- Sem ferramentas de desenvolvimento
+
+```bash
+docker build -f Dockerfile.prod -t api-blackbox:prod .
+docker run -p 8080:8080 --env-file .env api-blackbox:prod
+```
+
+### cloudbuild.yaml
+
+Configuração de **CI/CD para GCP**:
+- Build automático da imagem
+- Push para Artifact Registry (versionamento)
+- Deploy no Cloud Run
+
+**Processo**: Build → Push → Deploy
+
+### deploy.sh
+
+Script de **deploy automatizado**:
+- Validações de ambiente e credenciais
+- Deploy interativo com confirmações
+- Exibe informações pós-deploy
+
+```bash
+bash deploy.sh
 ```
 
 ---
 
-## 🚨 Troubleshooting
+## 🔧 Troubleshooting
 
-### Erro: "OPENROUTER_API_KEY não encontrada"
+### Erro: OPENROUTER_API_KEY não encontrada
 
-**Causa:** API key não configurada  
-**Solução:**
+**Sintoma**: `500 Internal Server Error: Missing OPENROUTER_API_KEY`
+
+**Soluções**:
 ```bash
 # .env
 OPENROUTER_API_KEY=sk-or-v1-xxx
 
-# Ou Secret Manager
+# Ou Secret Manager (GCP)
 gcloud secrets create OPENROUTER_API_KEY --data-file=- <<< "sk-or-v1-xxx"
 ```
 
 ### Erro: 429 - Limite diário excedido
 
-**Causa:** Gasto do dia >= limite configurado  
-**Solução:**
+**Sintoma**: `429 Too Many Requests: Daily budget exceeded`
+
+**Soluções**:
 1. Aumentar limite: `BUDGET_USD_DAY=30.0`
 2. Esperar até meia-noite UTC (reset automático)
 3. Limpar spend_ledger (apenas dev):
@@ -502,58 +535,67 @@ gcloud secrets create OPENROUTER_API_KEY --data-file=- <<< "sk-or-v1-xxx"
 
 ### Erro: Database não conectado
 
-**Causa:** DDLs não aplicados ou conexão falhou  
-**Solução:**
+**Sintoma**: `500 Internal Server Error: Database connection failed`
+
+**Soluções**:
 ```bash
 # Verifica conectividade
 psql $DATABASE_URL -c "SELECT 1"
 
-# Aplica DDLs
+# Aplica schemas
 make db-init
+
+# Verifica se PostgreSQL está rodando
+docker ps | grep postgres
 ```
 
 ### Latência alta (>5s)
 
-**Possíveis causas:**
-1. Modelo lento (GPT-4 é mais lento que 3.5)
+**Causas comuns**:
+1. Modelo lento (GPT-4 é mais lento que GPT-3.5)
 2. Prompt muito grande (reduzir contexto)
-3. OpenRouter sobrecarregado (retry automático)
+3. OpenRouter sobrecarregado
 4. Rede lenta
 
-**Soluções:**
-- Use modelos mais rápidos (`gpt-oss-120b`, `gpt-3.5-turbo`)
+**Soluções**:
+- Use modelos mais rápidos: `gpt-oss-120b`, `gpt-3.5-turbo`
 - Reduza `max_tokens`
 - Aumente timeout: `client.timeout = 120.0`
 
+### PII não está sendo mascarado
+
+**Sintoma**: Dados sensíveis aparecem nos logs
+
+**Verificar**:
+```python
+# Testar regex localmente
+from app.middleware.pii_masker import mask_pii
+
+text = "Meu CPF é 123.456.789-00"
+masked = mask_pii(text)
+print(masked)  # Deve mostrar: "Meu CPF é ***.***.**-**"
+```
+
+**Soluções**:
+1. Verifique se middleware está ativo
+2. Verifique formato dos dados (regex pode não detectar formatos incomuns)
+3. Adicione novos padrões no `pii_masker.py`
+
 ---
 
-## 📈 Próximos Passos
+## 📚 Documentação Adicional
 
-Depois de dominar a API Blackbox, você está pronto para:
-
-1. **Geração de Dataset para Fine-tuning** (próximo módulo)
-2. **Integração com NeMo Guardrails** (segurança avançada)
-3. **Deploy em produção no Cloud Run**
-4. **Dashboards de monitoramento com Grafana**
+- **[DEPLOY.md](./DEPLOY.md)** - Deploy avançado em cloud
+- **[PROMPT_LIBRARY.md](./PROMPT_LIBRARY.md)** - Biblioteca de prompts versionados
+- **[OpenRouter Docs](https://openrouter.ai/docs)** - Documentação oficial
+- **[FastAPI Docs](https://fastapi.tiangolo.com)** - Framework web
 
 ---
 
 ## 🤝 Contribuindo
 
-Veja [CONTRIBUTING.md](../../CONTRIBUTING.md).
+Veja [CONTRIBUTING.md](../../CONTRIBUTING.md) na raiz do projeto.
 
 ---
 
-## 📚 Referências
-
-- [OpenRouter API Docs](https://openrouter.ai/docs)
-- [FastAPI Docs](https://fastapi.tiangolo.com)
-- [Pydantic Docs](https://docs.pydantic.dev)
-- [LGPD](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm)
-
----
-
-**Desenvolvido com ❤️ para LLMOps Lab**
-
-*Aprenda fazendo. Crie governança. Escale com confiança.*
-
+**Desenvolvido com ❤️ pelo Learning LLMOps Team**

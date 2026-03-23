@@ -1,0 +1,77 @@
+# Dockerfile de Produção - Agents Pipeline
+#
+# Este Dockerfile é otimizado para produção:
+# - Multi-stage build (imagem menor)
+# - Sem hot reload
+# - Logs otimizados
+# - Segurança reforçada
+# - Performance otimizada
+
+# ========== STAGE 1: BUILDER ==========
+# Instala dependências e compila pacotes
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Instala dependências de build
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copia e instala dependências Python
+COPY pipelines/agents/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ========== STAGE 2: RUNTIME ==========
+# Imagem final otimizada
+FROM python:3.11-slim
+
+LABEL maintainer="llmops-lab"
+LABEL description="Agents Pipeline - Produção"
+
+# Cria usuário não-root para segurança
+RUN useradd -m -u 1000 appuser
+
+WORKDIR /app
+
+# Copia dependências Python do builder
+COPY --from=builder /root/.local /home/appuser/.local
+
+# Copia código do pipeline e dependências
+COPY --chown=appuser:appuser llmops_lab llmops_lab/
+COPY --chown=appuser:appuser pipelines/agents pipelines/agents/
+
+# Variáveis de ambiente para produção
+ENV PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
+    LOG_LEVEL=INFO \
+    DEBUG=false \
+    PORT=8080 \
+    PYTHONPATH=/app \
+    PATH=/home/appuser/.local/bin:$PATH \
+    EXPORTS_DIR=/app/exports
+
+# Cria diretório de exports
+RUN mkdir -p /app/exports && chown -R appuser:appuser /app/exports
+
+# Muda para usuário não-root
+USER appuser
+
+# Porta exposta (Cloud Run usa 8080)
+EXPOSE 8080
+
+# Workdir final
+WORKDIR /app/pipelines/agents/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8080/health', timeout=5)" || exit 1
+
+# Comando para rodar em produção
+# --host 0.0.0.0: Aceita conexões de qualquer IP
+# --port 8080: Porta padrão do Cloud Run
+# --workers 1: 1 worker (Cloud Run gerencia instâncias)
+# --log-level warning: Logs apenas de warnings e erros
+# --no-access-log: Desabilita logs de acesso (reduz verbosidade)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--log-level", "warning", "--no-access-log"]

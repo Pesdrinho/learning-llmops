@@ -1,0 +1,164 @@
+# Configuração de Modelos e Preços
+# Preços em USD por 1M tokens (atualizado em 2025-10-31)
+# Fonte: https://openrouter.ai/models
+
+openrouter:
+  # ==================== MODELOS RÁPIDOS/BARATOS ====================
+
+  openai/gpt-4o-mini:
+    name: "GPT-4o Mini"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000150
+    out_usd_per_1k: 0.000600
+    context_window: 128000
+    use_case: "fast"
+    description: "Modelo mais rápido e barato da OpenAI com ótimo custo-benefício"
+
+  meta-llama/llama-3.1-8b-instruct:
+    name: "Llama 3.1 8B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000050
+    out_usd_per_1k: 0.000050
+    context_window: 128000
+    use_case: "fast"
+    description: "Modelo open source da Meta, muito rápido e barato"
+
+  google/gemini-flash-2.5:
+    name: "Gemini 2.5 Flash"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000200
+    out_usd_per_1k: 0.002500
+    context_window: 1000000
+    use_case: "fast"
+    description: "Modelo rápido do Google com contexto massivo"
+
+  qwen/qwen-2.5-7b-instruct:
+    name: "Qwen 2.5 7B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000040
+    out_usd_per_1k: 0.000040
+    context_window: 32768
+    use_case: "fast"
+    description: "Modelo chinês open source de alta qualidade"
+
+  # ==================== MODELOS BALANCEADOS ====================
+
+  openai/gpt-4o:
+    name: "GPT-4o"
+    provider: "openrouter"
+    in_usd_per_1k: 0.002500
+    out_usd_per_1k: 0.010000
+    context_window: 128000
+    use_case: "balanced"
+    description: "Modelo flagship da OpenAI com multimodal nativo"
+
+  anthropic/claude-3-haiku:
+    name: "Claude 3 Haiku"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000250
+    out_usd_per_1k: 0.001250
+    context_window: 200000
+    use_case: "balanced"
+    description: "Claude mais rápido e barato, ótimo custo-benefício"
+
+  google/gemini-pro-1.5:
+    name: "Gemini 1.5 Pro"
+    provider: "openrouter"
+    in_usd_per_1k: 0.001250
+    out_usd_per_1k: 0.005000
+    context_window: 2000000
+    use_case: "balanced"
+    description: "Modelo do Google com contexto gigantesco"
+
+  deepseek/deepseek-chat:
+    name: "DeepSeek Chat"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000140
+    out_usd_per_1k: 0.000280
+    context_window: 64000
+    use_case: "balanced"
+    description: "Modelo chinês com excelente performance"
+
+  # ==================== MODELOS PRECISOS/CAROS ====================
+
+  anthropic/claude-3.5-sonnet:
+    name: "Claude 3.5 Sonnet"
+    provider: "openrouter"
+    in_usd_per_1k: 0.003000
+    out_usd_per_1k: 0.015000
+    context_window: 200000
+    use_case: "precise"
+    description: "Um dos melhores modelos disponíveis, excelente raciocínio"
+
+  openai/gpt-4-turbo:
+    name: "GPT-4 Turbo"
+    provider: "openrouter"
+    in_usd_per_1k: 0.010000
+    out_usd_per_1k: 0.030000
+    context_window: 128000
+    use_case: "precise"
+    description: "GPT-4 completo com visão e análise avançada"
+
+  meta-llama/llama-3.1-70b-instruct:
+    name: "Llama 3.1 70B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000520
+    out_usd_per_1k: 0.000750
+    context_window: 128000
+    use_case: "precise"
+    description: "Modelo grande da Meta com excelente qualidade"
+
+  qwen/qwen-2.5-72b-instruct:
+    name: "Qwen 2.5 72B Instruct"
+    provider: "openrouter"
+    in_usd_per_1k: 0.000350
+    out_usd_per_1k: 0.000400
+    context_window: 32768
+    use_case: "precise"
+    description: "Modelo grande chinês com ótimo custo-benefício"
+
+embeddings:
+  openai/text-embedding-3-small:
+    name: "OpenAI Embedding Small"
+    provider: "openai"
+    dims: 1536
+    usd_per_1k: 0.000000020
+    use_case: "rag"
+
+  openai/text-embedding-3-large:
+    name: "OpenAI Embedding Large"
+    provider: "openai"
+    dims: 3072
+    usd_per_1k: 0.000000130
+    use_case: "rag-precise"
+
+fine_tuning:
+  qwen/qwen-7b-chat:
+    name: "Qwen 7B Chat"
+    provider: "huggingface"
+    model_id: "Qwen/Qwen-7B-Chat"
+    context_window: 8192
+    use_case: "tool-use"
+    notes: "Modelo base para fine-tuning de tool calling"
+
+  qwen/qwen-14b-chat:
+    name: "Qwen 14B Chat"
+    provider: "huggingface"
+    model_id: "Qwen/Qwen-14B-Chat"
+    context_window: 8192
+    use_case: "tool-use-advanced"
+    notes: "Modelo maior para casos mais complexos"
+
+# Aliases para facilitar uso
+aliases:
+  fast: "openai/gpt-4o-mini"
+  precise: "anthropic/claude-3.5-sonnet"
+  balanced: "deepseek/deepseek-chat"
+  default_embed: "openai/text-embedding-3-small"
+  default_ft: "qwen/qwen-7b-chat"
+
+# Limites de Budget
+budget:
+  daily_limit_usd: 15.00
+  warning_threshold_pct: 80  # Aviso quando atingir 80% do limite
+  hard_limit: true  # Bloquear quando atingir limite

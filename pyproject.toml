@@ -1,0 +1,146 @@
+[project]
+name = "learning_llmops"
+version = "0.1.0"
+description = "Repositório educacional completo com arquiteturas LLMOps"
+authors = [
+    {name = "Pedro Ribeiro Fernandes"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+    # Web Framework
+    "fastapi==0.119.0",
+    "uvicorn[standard]==0.37.0",
+    "pydantic==2.12.3",
+    "pydantic-settings==2.11.0",
+
+    # Database
+    "sqlalchemy==2.0.44",
+    "asyncpg==0.30.0",
+    "psycopg2-binary==2.9.11",
+    "alembic==1.17.0",
+
+    # LLM & AI
+    "openai==2.5.0",
+    "anthropic==0.71.0",
+    "langchain==1.0.2",
+    "langchain-openai==1.0.1",
+    "langchain-community==0.3.31",
+    "langgraph==1.0.2",
+    "langsmith==0.4.27",
+
+    # RAG & Embeddings
+    "tiktoken==0.8.0",
+    "sentence-transformers==5.1.2",
+    "faiss-cpu==1.12.0",
+
+    # Fine-tuning
+    "transformers==4.57.1",
+    "datasets==4.2.0",
+    "peft==0.17.1",
+    "accelerate==1.11.0",
+    "bitsandbytes==0.45",
+    "trl==0.12.1",
+
+    # Evaluation
+    "ragas==0.3.7",
+
+    # Guardrails
+    "nemoguardrails==0.17.0",
+
+    # GCP
+    "google-cloud-secret-manager==2.20.2",
+    "google-cloud-storage==2.19.0",
+
+    # Data Processing
+    "httpx==0.28.1",
+    "requests==2.32.5",
+    "pandas==2.3.2",
+    "numpy==2.3.1",
+
+    # SQL
+    "sqlglot==27.26.0",
+
+    # Web Search
+    "duckduckgo-search==8.1.1",
+
+    # Utilities
+    "python-dotenv==1.1.1",
+    "pyyaml==6.0.3",
+    "jinja2==3.1.6",
+    "tenacity==9.1.2",
+    "python-multipart==0.0.20",
+    "pre-commit==4.3.0",
+    "ruff==0.14.1",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.4",
+    "pytest-asyncio>=0.23.3",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.1.14",
+    "pre-commit>=3.6.0",
+    "ipython>=8.20.0",
+    "jupyter>=1.0.0",
+    "black>=24.1.0",
+    "mypy>=1.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["llmops_lab*", "pipelines*", "apps*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+    "F841"   # Unused variable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+asyncio_mode = "auto"
+addopts = "-v --cov=llmops_lab --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
+namespace_packages = true
+
+# Cada pipeline tem seu próprio namespace "app", então devem ser verificados separadamente
+[[tool.mypy.overrides]]
+module = "pipelines.*.app.*"
+follow_imports = "skip"

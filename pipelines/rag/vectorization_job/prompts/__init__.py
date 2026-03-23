@@ -1,0 +1,1 @@
+"""Prompts para chunking dinâmico"""

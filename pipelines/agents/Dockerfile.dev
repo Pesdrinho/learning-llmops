@@ -1,0 +1,65 @@
+# Dockerfile de Desenvolvimento - Agents Pipeline
+#
+# Este Dockerfile é otimizado para desenvolvimento local:
+# - Hot reload (código atualiza automaticamente)
+# - Debug facilitado
+# - Logs verbosos
+# - Sem otimizações de produção
+
+FROM python:3.11-slim
+
+LABEL maintainer="llmops-lab"
+LABEL description="Agents Pipeline - Desenvolvimento"
+
+# Diretório de trabalho
+WORKDIR /app
+
+# Instala dependências do sistema
+# gcc: Compilador C (necessário para alguns pacotes Python)
+# postgresql-client: Cliente PostgreSQL (para debug)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copia requirements.txt para instalar dependências
+COPY pipelines/agents/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia código do pipeline e dependências
+COPY llmops_lab llmops_lab/
+COPY pipelines/agents pipelines/agents/
+COPY ../../.env .env
+COPY ../../.gcp .gcp
+
+# Variáveis de ambiente para desenvolvimento
+ENV PYTHONUNBUFFERED=1 \
+    APP_ENV=development \
+    LOG_LEVEL=DEBUG \
+    DEBUG=true \
+    PORT=9001 \
+    PYTHONPATH=/app \
+    DB_HOST=34.61.66.212 \
+    DB_PORT=5432 \
+    DB_USER=postgres \
+    DB_PASSWORD='i<sy9[)\=Ms[y\1v' \
+    DB_NAME=postgres \
+    USE_CLOUD_SQL_PROXY=false \
+    DB_CONNECTION_NAME="" \
+    EXPORTS_DIR=/app/exports
+
+# Cria diretório de exports
+RUN mkdir -p /app/exports
+
+# Porta exposta
+EXPOSE 9001
+
+# Workdir final
+WORKDIR /app/pipelines/agents/app
+
+# Comando para rodar
+# --reload: Hot reload (recarrega ao detectar mudanças)
+# --host 0.0.0.0: Aceita conexões de qualquer IP
+# --log-level info: Logs informativos
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9001", "--reload", "--log-level", "info"]

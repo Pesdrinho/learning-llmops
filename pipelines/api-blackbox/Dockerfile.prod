@@ -1,0 +1,104 @@
+# Dockerfile de Produção - API Blackbox
+#
+# Este Dockerfile é otimizado para produção:
+# - Imagem mínima (sem ferramentas de debug)
+# - Usuário não-root (segurança)
+# - Health checks
+# - Multi-worker com Gunicorn
+# - Otimizações de performance
+
+FROM python:3.11-slim as builder
+
+# Stage 1: Builder
+# Compila dependências em ambiente isolado
+
+WORKDIR /build
+
+# Instala dependências de compilação
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia apenas requirements
+COPY pipelines/api-blackbox/requirements.txt ./requirements.txt
+
+# Instala dependências em diretório temporário
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+
+# Stage 2: Runtime
+# Imagem final enxuta
+
+FROM python:3.11-slim
+
+LABEL maintainer="llmops-lab"
+LABEL description="API Blackbox - Produção"
+LABEL version="0.1.0"
+
+WORKDIR /app
+
+# Instala apenas dependências de runtime (sem gcc)
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copia requirements primeiro
+COPY pipelines/api-blackbox/requirements.txt ./requirements.txt
+
+# Instala dependências
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir gunicorn
+
+# Copia código-fonte
+COPY llmops_lab llmops_lab/
+COPY pipelines/api-blackbox pipelines/api-blackbox/
+
+# Cria usuário não-root
+# Por que?
+# - Segurança: root pode comprometer todo o sistema
+# - Best practice: princípio do menor privilégio
+# - Compliance: muitas empresas exigem
+RUN useradd -m -u 1000 -s /bin/bash apiuser \
+    && chown -R apiuser:apiuser /app
+
+# Muda para usuário não-root
+USER apiuser
+
+# Variáveis de ambiente
+ENV PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
+    PORT=8080 \
+    PYTHONPATH=/app \
+    WORKERS=2
+
+# Health check
+# Cloud Run/Kubernetes usam isso para verificar se o container está saudável
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"
+
+# Porta exposta (Cloud Run usa 8080 por padrão)
+EXPOSE 8080
+
+# Workdir final
+WORKDIR /app/pipelines/api-blackbox/app
+
+# Comando de produção
+# Gunicorn: WSGI server para produção
+# -w: Workers (processadores)
+# -k: Worker class (uvicorn para async)
+# --timeout: Timeout de 60s (LLMs podem demorar)
+# --access-logfile: Logs de acesso
+# --error-logfile: Logs de erro
+CMD ["gunicorn", \
+     "-w", "2", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:8080", \
+     "--timeout", "60", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "main:app"]
+
